@@ -20,7 +20,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.0.8")]
+    [Info("Discord Wipe", "MJSU", "2.0.9")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -214,7 +214,12 @@ namespace Oxide.Plugins
         
         private void OnServerInitialized()
         {
+#if RUST
             _consolePlayer = new RustConsolePlayer();
+#elif HURTWORLD
+            _consolePlayer = new HurtworldConsolePlayer();
+#endif
+            
             _protocol = GetProtocol();
             timer.In(5f, () => HandleStartup());
         }
