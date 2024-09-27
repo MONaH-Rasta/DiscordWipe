@@ -1,0 +1,87 @@
+name: Check uMod Plugin Updates
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Check every day at midnight (UTC)
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  check-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch current version from uMod
+        id: fetch_umod
+        run: |
+          # API URL to fetch plugin data
+          UMOD_API_URL="https://umod.org/plugins/discord-wipe.json"
+          
+          # Fetching the plugin data from uMod API
+          response=$(curl -s $UMOD_API_URL)
+
+          # Extract latest version and download URL
+          latest_version=$(echo "$response" | jq -r '.latest_release_version')
+          download_url=$(echo "$response" | jq -r '.download_url')
+
+          echo "Latest version on uMod: $latest_version"
+          echo "Download URL: $download_url"
+
+          # Setting outputs for further steps
+          echo "::set-output name=latest_version::$latest_version"
+          echo "::set-output name=download_url::$download_url"
+
+      - name: Get latest GitHub release version
+        id: get_latest_release
+        run: |
+          # Get the latest tag version from GitHub
+          latest_tag=$(git describe --tags $(git rev-list --tags --max-count=1))
+
+          # Removing the 'v' prefix if it exists
+          current_version=${latest_tag#v}
+
+          echo "Latest GitHub release version: $current_version"
+          echo "::set-output name=current_version::$current_version"
+
+      - name: Compare versions
+        id: compare
+        run: |
+          current_version="${{ steps.get_latest_release.outputs.current_version }}"
+          latest_version="${{ steps.fetch_umod.outputs.latest_version }}"
+
+          echo "Current version in repo: $current_version"
+          echo "Latest version from uMod: $latest_version"
+          
+          # Compare versions
+          if [ "$current_version" != "$latest_version" ]; then
+            echo "New version found: $latest_version"
+            echo "::set-output name=new_version::true"
+          else
+            echo "No new version"
+            echo "::set-output name=new_version::false"
+          fi
+
+      - name: Download new plugin version
+        if: steps.compare.outputs.new_version == 'true'
+        run: |
+          download_url="${{ steps.fetch_umod.outputs.download_url }}"
+          
+          # Downloading new plugin version
+          curl -o DiscordWipe.cs "$download_url"
+          
+          # Commit the new version to the repository
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add DiscordWipe.cs
+          git commit -m "v${{ steps.fetch_umod.outputs.latest_version }}"
+          git push
+
+      - name: Create GitHub release
+        if: steps.compare.outputs.new_version == 'true'
+        run: |
+          gh release create "v${{ steps.fetch_umod.outputs.latest_version }}" \
+            DiscordWipe.cs \
+            --title "DiscordWipe v${{ steps.fetch_umod.outputs.latest_version }}" \
+            --notes "Automatic release of new version from uMod."
