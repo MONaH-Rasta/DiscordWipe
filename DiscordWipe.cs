@@ -19,7 +19,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.1.11")]
+    [Info("Discord Wipe", "MJSU", "2.2.0")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -32,7 +32,8 @@ namespace Oxide.Plugins
 
         private const string DefaultUrl = "https://support.discordapp.com/hc/en-us/articles/228383668-Intro-to-Webhooks";
         private const string AdminPermission = "discordwipe.admin";
-        private const string MapAttachment = "attachment://" + MapFilename;
+        private const string AttachmentBase = "attachment://";
+        private const string MapAttachment = AttachmentBase + MapFilename;
         private const string MapFilename = "map.jpg";
         private const int MaxImageSize = 8 * 1024 * 1024;
         
@@ -42,6 +43,7 @@ namespace Oxide.Plugins
         private Action<IPlayer, StringBuilder, bool> _replacer;
         
         private enum DebugEnum {Message, None, Error, Warning, Info}
+        public enum SendMode {Always, Random}
         private enum EncodingMode {Jpg = 1, Png = 2}
         #endregion
 
@@ -85,111 +87,115 @@ namespace Oxide.Plugins
 
         private PluginConfig AdditionalConfig(PluginConfig config)
         {
-            config.WipeEmbed = new DiscordMessageConfig
-            {
-                Content = config.WipeEmbed?.Content ?? "@everyone",
-                Embed = new EmbedConfig
+            config.WipeEmbeds = config.WipeEmbeds ?? new List<DiscordMessageConfig> { 
+                new DiscordMessageConfig
                 {
-                    Title = config.WipeEmbed?.Embed?.Title ?? "{server.name}",
-                    Description = config.WipeEmbed?.Embed?.Description ?? "The server has wiped!",
-                    Url = config.WipeEmbed?.Embed?.Url ?? string.Empty,
-                    Color = config.WipeEmbed?.Embed?.Color ?? "#de8732",
-                    Image = config.WipeEmbed?.Embed?.Image ?? MapAttachment,
-                    Thumbnail = config.WipeEmbed?.Embed?.Thumbnail ?? string.Empty,
-                    Fields = config.WipeEmbed?.Embed?.Fields ?? new List<FieldConfig>
+                    Content = "@everyone",
+                    SendMode = SendMode.Always,
+                    Embed = new EmbedConfig
                     {
+                        Title = "{server.name}",
+                        Description = "The server has wiped!",
+                        Url = string.Empty,
+                        Color = "#de8732",
+                        Image = MapAttachment,
+                        Thumbnail = string.Empty,
+                        Fields = new List<FieldConfig>
+                        {
 #if RUST
-                        new FieldConfig
-                        {
-                            Title = "Seed",
-                            Value = "[{world.seed}](https://rustmaps.com/map/{world.size}_{world.seed})",
-                            Inline = true,
-                            Enabled = true
-                        },
-                        new FieldConfig
-                        {
-                            Title = "Size",
-                            Value = "{world.size}M ({world.size!km^2}km^2)",
-                            Inline = true,
-                            Enabled = true
-                        },
-                        new FieldConfig
-                        {
-                            Title = "Protocol",
-                            Value = "{server.protocol.network}",
-                            Inline = true,
-                            Enabled = true
-                        },
+                            new FieldConfig
+                            {
+                                Title = "Seed",
+                                Value = "[{world.seed}](https://rustmaps.com/map/{world.size}_{world.seed})",
+                                Inline = true,
+                                Enabled = true
+                            },
+                            new FieldConfig
+                            {
+                                Title = "Size",
+                                Value = "{world.size}M ({world.size!km^2}km^2)",
+                                Inline = true,
+                                Enabled = true
+                            },
+                            new FieldConfig
+                            {
+                                Title = "Protocol",
+                                Value = "{server.protocol.network}",
+                                Inline = true,
+                                Enabled = true
+                            },
 #endif
-                        new FieldConfig
+                            new FieldConfig
+                            {
+                                Title = "Click & Connect",
+                                Value = "steam://connect/{server.address}:{server.port}",
+                                Inline = false,
+                                Enabled = true
+                            }
+                        },
+                        Footer = new FooterConfig
                         {
-                            Title = "Click & Connect",
-                            Value = "steam://connect/{server.address}:{server.port}",
-                            Inline = false,
+                            IconUrl = string.Empty,
+                            Text = string.Empty,
                             Enabled = true
-                        }
-                    },
-                    Footer = new FooterConfig
-                    {
-                        IconUrl = config.WipeEmbed?.Embed?.Footer?.IconUrl ?? string.Empty,
-                        Text = config.WipeEmbed?.Embed?.Footer?.Text ?? string.Empty,
-                        Enabled = config.WipeEmbed?.Embed?.Footer?.Enabled ?? true
-                    },
-                    Enabled = config.WipeEmbed?.Embed?.Enabled ?? true
-                }
-            };
+                        },
+                        Enabled = true
+                    }
+                }};
             
-            config.ProtocolEmbed = new DiscordMessageConfig
-            {
-                Content = config.ProtocolEmbed?.Content ?? "@everyone",
-                Embed = new EmbedConfig
+            config.ProtocolEmbeds = config.ProtocolEmbeds ?? new List<DiscordMessageConfig> { 
+                new DiscordMessageConfig
                 {
-                    Title = config.ProtocolEmbed?.Embed?.Title ?? "{server.name}",
-                    Description = config.ProtocolEmbed?.Embed?.Description ?? "The server protocol has changed!",
-                    Url = config.ProtocolEmbed?.Embed?.Url ?? string.Empty,
-                    Color = config.ProtocolEmbed?.Embed?.Color ?? "#de8732",
-                    Image = config.ProtocolEmbed?.Embed?.Image ?? string.Empty,
-                    Thumbnail = config.ProtocolEmbed?.Embed?.Thumbnail ?? string.Empty,
-                    Fields = config.ProtocolEmbed?.Embed?.Fields ?? new List<FieldConfig>
+                    Content = "@everyone",
+                    SendMode = SendMode.Always,
+                    Embed = new EmbedConfig
                     {
-                        new FieldConfig
+                        Title = "{server.name}",
+                        Description = "The server protocol has changed!",
+                        Url = string.Empty,
+                        Color = "#de8732",
+                        Image = string.Empty,
+                        Thumbnail = string.Empty,
+                        Fields = new List<FieldConfig>
                         {
-                            Title = "Protocol",
-                            Value = "{server.protocol.network}",
-                            Inline = true,
+                            new FieldConfig
+                            {
+                                Title = "Protocol",
+                                Value = "{server.protocol.network}",
+                                Inline = true,
+                                Enabled = true
+                            },
+                            new FieldConfig
+                            {
+                                Title = "Previous Protocol",
+                                Value = "{server.protocol.previous}",
+                                Inline = true,
+                                Enabled = true
+                            },
+                            new FieldConfig
+                            {
+                                Title = "Mandatory Client Update",
+                                Value = "This update requires a mandatory client update in order to be able to play on the server",
+                                Inline = false,
+                                Enabled = true
+                            },
+                            new FieldConfig
+                            {
+                                Title = "Click & Connect",
+                                Value = "steam://connect/{server.address}:{server.port}",
+                                Inline = false,
+                                Enabled = true
+                            }
+                        },
+                        Footer = new FooterConfig
+                        {
+                            IconUrl = string.Empty,
+                            Text = string.Empty,
                             Enabled = true
                         },
-                        new FieldConfig
-                        {
-                            Title = "Previous Protocol",
-                            Value = "{server.protocol.previous}",
-                            Inline = true,
-                            Enabled = true
-                        },
-                        new FieldConfig
-                        {
-                            Title = "Mandatory Client Update",
-                            Value = "This update requires a mandatory client update in order to be able to play on the server",
-                            Inline = false,
-                            Enabled = true
-                        },
-                        new FieldConfig
-                        {
-                            Title = "Click & Connect",
-                            Value = "steam://connect/{server.address}:{server.port}",
-                            Inline = false,
-                            Enabled = true
-                        }
-                    },
-                    Footer = new FooterConfig
-                    {
-                        IconUrl = config.ProtocolEmbed?.Embed?.Footer?.IconUrl ?? string.Empty,
-                        Text = config.ProtocolEmbed?.Embed?.Footer?.Text ?? string.Empty,
-                        Enabled = config.ProtocolEmbed?.Embed?.Footer?.Enabled ?? true
-                    },
-                    Enabled = config.ProtocolEmbed?.Embed?.Enabled ?? true
-                }
-            };
+                        Enabled = true
+                    }
+                }};
 
 #if RUST
             config.ImageSettings = new RustMapImageSettings
@@ -205,6 +211,30 @@ namespace Oxide.Plugins
         
         private void OnServerInitialized()
         {
+            bool changed = false;
+            if (_pluginConfig.WipeEmbed != null)
+            {
+                _pluginConfig.WipeEmbeds.Clear();
+                _pluginConfig.WipeEmbed.SendMode = SendMode.Always;
+                _pluginConfig.WipeEmbeds.Add(_pluginConfig.WipeEmbed);
+                _pluginConfig.WipeEmbed = null;
+                changed = true;
+            }
+            
+            if (_pluginConfig.ProtocolEmbed != null)
+            {
+                _pluginConfig.ProtocolEmbeds.Clear();
+                _pluginConfig.ProtocolEmbed.SendMode = SendMode.Always;
+                _pluginConfig.ProtocolEmbeds.Add(_pluginConfig.ProtocolEmbed);
+                _pluginConfig.ProtocolEmbed = null;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                Config.WriteObject(_pluginConfig);
+            }
+            
             _protocol = GetProtocol();
             if (PlaceholderAPI == null || !PlaceholderAPI.IsLoaded)
             {
@@ -336,8 +366,22 @@ namespace Oxide.Plugins
                 Debug(DebugEnum.Info, "SendWipe - Wipe message not sent due to Wipe Webhook being blank or matching the default url");
                 return;
             }
+
+            List<DiscordMessageConfig> messages = _pluginConfig.WipeEmbeds
+                .Where(w => w.SendMode == SendMode.Always)
+                .ToList();
             
-            SendMessage(_pluginConfig.WipeWebhook, _pluginConfig.WipeEmbed);
+            DiscordMessageConfig random = _pluginConfig.WipeEmbeds
+                .Where(w => w.SendMode == SendMode.Random)
+                .OrderBy(w => Guid.NewGuid())
+                .FirstOrDefault();
+
+            if (random != null)
+            {
+                messages.Add(random);
+            }
+
+            SendMessage(_pluginConfig.WipeWebhook, messages);
             Debug(DebugEnum.Message, "");
         }
 
@@ -350,28 +394,50 @@ namespace Oxide.Plugins
                 return;
             }
             
-            SendMessage(_pluginConfig.ProtocolWebhook, _pluginConfig.ProtocolEmbed);
+            List<DiscordMessageConfig> messages = _pluginConfig.ProtocolEmbeds
+                .Where(w => w.SendMode == SendMode.Always)
+                .ToList();
+            
+            DiscordMessageConfig random = _pluginConfig.ProtocolEmbeds
+                .Where(w => w.SendMode == SendMode.Random)
+                .OrderBy(w => Guid.NewGuid())
+                .FirstOrDefault();
+
+            if (random != null)
+            {
+                messages.Add(random);
+            }
+            
+            SendMessage(_pluginConfig.ProtocolWebhook, messages);
         }
 
-        private void SendMessage(string url, DiscordMessageConfig messageConfig)
+        private void SendMessage(string url, List<DiscordMessageConfig> messageConfigs)
         {
-            DiscordMessage message = ParseMessage(messageConfig);
-#if RUST
-            List<Attachment> attachments = new List<Attachment>();
-            
-            AttachMap(attachments, messageConfig);
+            for (int index = 0; index < messageConfigs.Count; index++)
+            {
+                DiscordMessageConfig messageConfig = messageConfigs[index];
+                DiscordMessage message = ParseMessage(messageConfig);
 
-            SendDiscordAttachmentMessage(url, message, attachments);
+                timer.In(index + 1, () =>
+                {
+#if RUST
+                    List<Attachment> attachments = new List<Attachment>();
+
+                    AttachMap(attachments, messageConfig);
+
+                    SendDiscordAttachmentMessage(url, message, attachments);
 #else
-            SendDiscordMessage(url, message);
+                SendDiscordMessage(url, message);
 #endif
+                });
+            }
         }
         #endregion
         
         #if RUST
         private void AttachMap(List<Attachment> attachments, DiscordMessageConfig messageConfig)
         {
-            if (IsRustMapApiLoaded() && IsRustMapApiReady() && messageConfig.Embed.Image == MapAttachment)
+            if (IsRustMapApiLoaded() && IsRustMapApiReady() && messageConfig.Embed.Image.StartsWith(AttachmentBase))
             {
                 Debug(DebugEnum.Info, "AttachMap - RustMapApi is ready, attaching map");
                 List<string> maps = RustMapApi.Call<List<string>>("GetSavedMaps");
@@ -534,11 +600,27 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Protocol Webhook url")]
             public string ProtocolWebhook { get; set; }
             
+            [JsonProperty(PropertyName = "Wipe messages")]
+            public List<DiscordMessageConfig> WipeEmbeds { get; set; }
+            
+            [JsonProperty(PropertyName = "Protocol messages")]
+            public List<DiscordMessageConfig> ProtocolEmbeds { get; set; }
+
             [JsonProperty(PropertyName = "Wipe message")]
             public DiscordMessageConfig WipeEmbed { get; set; }
             
             [JsonProperty(PropertyName = "Protocol message")]
             public DiscordMessageConfig ProtocolEmbed { get; set; }
+
+            public bool ShouldSerializeWipeEmbed()
+            {
+                return WipeEmbed != null;
+            }
+
+            public bool ShouldSerializeProtocolEmbed()
+            {
+                return ProtocolEmbed != null;
+            }
         }
 
 #if RUST
@@ -1241,13 +1323,18 @@ namespace Oxide.Plugins
 
         #region Config Classes
 
-        private class DiscordMessageConfig
+        public class DiscordMessageConfig
         {
             public string Content { get; set; }
+            
+            [JsonProperty("Send Mode (Always, Random)")]
+            [JsonConverter(typeof(StringEnumConverter))]
+            public SendMode SendMode { get; set; }
+            
             public EmbedConfig Embed { get; set; }
         }
         
-        private class EmbedConfig
+        public class EmbedConfig
         {
             [JsonProperty("Enabled")]
             public bool Enabled { get; set; }
@@ -1277,7 +1364,7 @@ namespace Oxide.Plugins
             public FooterConfig Footer { get; set; }
         }
         
-        private class FieldConfig
+        public class FieldConfig
         {
             [JsonProperty("Title")]
             public string Title { get; set; }
@@ -1292,7 +1379,7 @@ namespace Oxide.Plugins
             public bool Enabled { get; set; }
         }
 
-        private class FooterConfig
+        public class FooterConfig
         {
             [JsonProperty("Icon Url")]
             public string IconUrl { get; set; }
