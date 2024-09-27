@@ -41,19 +41,22 @@ jobs:
           echo "current_version=$current_version" >> $GITHUB_ENV
 
       - name: Compare versions
+        id: compare
         run: |
-          current_version="${{ env.current_version }}"
-          plugin_version="${{ env.plugin_version }}"
+          current_version="${{ steps.get_latest_release.outputs.current_version }}"
+          plugin_version="${{ steps.extract_version.outputs.plugin_version }}"
 
           echo "Current version in repo: $current_version"
           echo "Latest version in plugin file: $plugin_version"
-          
+
+          # Compare versions
           if [ "$current_version" != "$plugin_version" ]; then
             echo "New version found: $plugin_version"
             echo "new_version=true" >> $GITHUB_ENV
           else
             echo "No new version"
             echo "new_version=false" >> $GITHUB_ENV
+          fi
 
       - name: Commit and push new version
         if: env.new_version == 'true'
