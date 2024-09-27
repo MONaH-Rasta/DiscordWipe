@@ -48,8 +48,8 @@ jobs:
       - name: Compare versions
         id: compare
         run: |
-          current_version="${{ steps.get_latest_release.outputs.current_version }}"
-          latest_version="${{ steps.fetch_umod.outputs.latest_version }}"
+          current_version="${{ env.current_version }}"
+          latest_version="${{ env.latest_version }}"
 
           echo "Current version in repo: $current_version"
           echo "Latest version from uMod: $latest_version"
@@ -66,7 +66,7 @@ jobs:
       - name: Download new plugin version
         if: env.new_version == 'true'
         run: |
-          download_url="${{ steps.fetch_umod.outputs.download_url }}"
+          download_url="${{ env.download_url }}"
           
           # Downloading new plugin version
           curl -o DiscordWipe.cs "$download_url"
@@ -75,7 +75,7 @@ jobs:
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
           git add DiscordWipe.cs
-          git commit -m "v${{ steps.fetch_umod.outputs.latest_version }}"
+          git commit -m "v${{ env.latest_version }}"
           git push
 
       - name: Create GitHub release
@@ -83,7 +83,7 @@ jobs:
         env:
             GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "v${{ steps.fetch_umod.outputs.latest_version }}" \
+          gh release create "v${{ env.latest_version }}" \
             DiscordWipe.cs \
-            --title "DiscordWipe v${{ steps.fetch_umod.outputs.latest_version }}" \
+            --title "DiscordWipe v${{ env.latest_version }}" \
             --notes "Automatic release of new version from uMod."
