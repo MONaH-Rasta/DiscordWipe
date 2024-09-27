@@ -19,7 +19,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.0.11")]
+    [Info("Discord Wipe", "MJSU", "2.0.12")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -310,7 +310,7 @@ namespace Oxide.Plugins
         #region Message Handling
         private void SendWipe()
         {
-            if (_pluginConfig.WipeWebhook == DefaultUrl)
+            if (string.IsNullOrEmpty(_pluginConfig.WipeWebhook) || _pluginConfig.WipeWebhook == DefaultUrl)
             {
                 return;
             }
@@ -350,7 +350,7 @@ namespace Oxide.Plugins
 
         private void SendProtocol()
         {
-            if (_pluginConfig.ProtocolWebhook == DefaultUrl)
+            if (string.IsNullOrEmpty(_pluginConfig.ProtocolWebhook) || _pluginConfig.ProtocolWebhook == DefaultUrl)
             {
                 return;
             }
