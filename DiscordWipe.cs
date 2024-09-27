@@ -19,7 +19,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.1.4")]
+    [Info("Discord Wipe", "MJSU", "2.1.6")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -32,13 +32,13 @@ namespace Oxide.Plugins
 
         private const string DefaultUrl = "https://support.discordapp.com/hc/en-us/articles/228383668-Intro-to-Webhooks";
         private const string AdminPermission = "discordwipe.admin";
-        private const string MapAttachment = "attachment://map.jpg";
+        private const string MapAttachment = "attachment://" + MapFilename;
         private const string MapFilename = "map.jpg";
         
         private string _protocol;
         private string _previousProtocol;
 
-        private Action<IPlayer, StringBuilder> _replacer;
+        private Action<IPlayer, StringBuilder, bool> _replacer;
         
         private enum DebugEnum {Message, None, Error, Warning, Info}
         #endregion
@@ -54,7 +54,7 @@ namespace Oxide.Plugins
             permission.RegisterPermission(AdminPermission, this);
         }
         
-         protected override void LoadDefaultMessages()
+        protected override void LoadDefaultMessages()
         {
             lang.RegisterMessages(new Dictionary<string, string>
             {
@@ -100,7 +100,7 @@ namespace Oxide.Plugins
                         new FieldConfig
                         {
                             Title = "Seed",
-                            Value = "[{world.seed}](http://playrust.io/map/?Procedural%20Map_{world.size}_{world.seed})",
+                            Value = "[{world.seed}](https://rustmaps.com/map/{world.size}_{world.seed})",
                             Inline = true,
                             Enabled = true
                         },
@@ -193,6 +193,7 @@ namespace Oxide.Plugins
         
         private void OnServerInitialized()
         {
+            _protocol = GetProtocol();
             if (PlaceholderAPI == null || !PlaceholderAPI.IsLoaded)
             {
                 PrintError("Missing plugin dependency PlaceholderAPI: https://umod.org/plugins/placeholder-api");
@@ -204,32 +205,31 @@ namespace Oxide.Plugins
                 PrintError("Placeholder API plugin must be version 2.0.0 or higher");
                 return;
             }
-            
-            _protocol = GetProtocol();
-            timer.In(5f, () => HandleStartup());
-        }
 
-        private void HandleStartup(int attempts = 0)
-        {
-            if (attempts < 12 && RustMapApi != null && !RustMapApi.Call<bool>("IsReady"))
+            if (!IsRustMapApiReady())
             {
-                Puts($"Waiting on RustMapApi to be ready. Attempt # {attempts + 1}");
-                timer.In(5f, () => HandleStartup(attempts + 1));
                 return;
             }
 
-            if (attempts >= 12)
-            {
-                PrintWarning("RustMapApi failed to be ready in time. Skipping map image.");
-            }
-            
+            HandleStartup();
+        }
+
+        private void OnRustMapApiReady()
+        {
+            HandleStartup();
+        }
+        
+        private void HandleStartup()
+        {
             if (string.IsNullOrEmpty(_storedData.Protocol))
             {
+                Debug(DebugEnum.Info, $"HandleStartup - Protocol is not set setting protocol to: {_protocol}");
                 _storedData.Protocol = _protocol;
                 SaveData();
             }
             else if (_storedData.Protocol != _protocol)
             {
+                Debug(DebugEnum.Info, $"HandleStartup - Protocol has changed {_storedData.Protocol} -> {_protocol}");
                 SendProtocol();
                 _storedData.Protocol = _protocol;
                 SaveData();
@@ -238,6 +238,7 @@ namespace Oxide.Plugins
             
             if (_storedData.IsWipe)
             {
+                Debug(DebugEnum.Info, "HandleStartup - IsWipe is set. Sending wipe message.");
                 SendWipe();
                 Puts("Wipe notification sent");
                 _storedData.IsWipe = false;
@@ -248,6 +249,8 @@ namespace Oxide.Plugins
         private void OnNewSave(string filename)
         {
             _storedData.IsWipe = true;
+            Debug(DebugEnum.Info, "OnNewSave - Wipe Detected");
+            SaveData();
         }
 
         private void Unload()
@@ -259,9 +262,9 @@ namespace Oxide.Plugins
         {
 #if RUST
             return Rust.Protocol.network.ToString();
-#endif
-
+#else 
             return covalence.Server.Protocol;
+#endif
         }
         #endregion
 
@@ -305,23 +308,55 @@ namespace Oxide.Plugins
         #region Message Handling
         private void SendWipe()
         {
+            Debug(DebugEnum.Info, "SendWipe - Sending wipe message");
             if (string.IsNullOrEmpty(_pluginConfig.WipeWebhook) || _pluginConfig.WipeWebhook == DefaultUrl)
             {
+                Debug(DebugEnum.Info, "SendWipe - Wipe message not sent due to Wipe Webhook being blank or matching the default url");
                 return;
             }
             
-            DiscordMessage message = ParseMessage(_pluginConfig.WipeEmbed);
+            SendMessage(_pluginConfig.WipeWebhook, _pluginConfig.WipeEmbed);
+            Debug(DebugEnum.Message, "");
+        }
 
+        private void SendProtocol()
+        {
+            Debug(DebugEnum.Info, "SendProtocol - Sending protocol message");
+            if (string.IsNullOrEmpty(_pluginConfig.ProtocolWebhook) || _pluginConfig.ProtocolWebhook == DefaultUrl)
+            {
+                Debug(DebugEnum.Info, "SendProtocol - Protocol message not sent due to Wipe Webhook being blank or matching the default url");
+                return;
+            }
+            
+            SendMessage(_pluginConfig.ProtocolWebhook, _pluginConfig.ProtocolEmbed);
+        }
+
+        private void SendMessage(string url, DiscordMessageConfig messageConfig)
+        {
+            DiscordMessage message = ParseMessage(messageConfig);
 #if RUST
             List<Attachment> attachments = new List<Attachment>();
             
-            if (RustMapApi != null && _pluginConfig.WipeEmbed.Embed.Image == MapAttachment)
+            AttachMap(attachments, messageConfig);
+
+            SendDiscordAttachmentMessage(url, message, attachments);
+#else
+            SendDiscordMessage(url, message);
+#endif
+        }
+        #endregion
+        
+        #if RUST
+        private void AttachMap(List<Attachment> attachments, DiscordMessageConfig messageConfig)
+        {
+            if (IsRustMapApiReady() && messageConfig.Embed.Image == MapAttachment)
             {
+                Debug(DebugEnum.Info, "AttachMap - RustMapApi is ready, attaching map");
                 List<string> maps = RustMapApi.Call<List<string>>("GetSavedMaps");
                 string mapName = _pluginConfig.MapName;
                 if (maps != null)
                 {
-                    mapName = maps.FirstOrDefault(m => m.Equals(_pluginConfig.MapName, StringComparison.InvariantCultureIgnoreCase));
+                    mapName = maps.FirstOrDefault(m => m.Equals(mapName, StringComparison.InvariantCultureIgnoreCase));
                     if (string.IsNullOrEmpty(mapName))
                     {
                         PrintWarning($"Map name not found {_pluginConfig.MapName}. Valid names are {string.Join(", ", maps.ToArray())}");
@@ -329,53 +364,24 @@ namespace Oxide.Plugins
                     }
                 }
                 
+                Debug(DebugEnum.Info, $"AttachMap - RustMapApi map name set to: {mapName}");
                 Hash<string, object> map = RustMapApi.Call<Hash<string, object>>("GetFullMap", mapName);
                 byte[] mapData = map?["image"] as byte[];
                 if (mapData != null)
                 {
                     attachments.Add(new Attachment(mapData, MapFilename, AttachmentContentType.Jpg));
+                    Debug(DebugEnum.Info, "AttachMap - Successfully attached map");
                 }
             }
-
-            SendDiscordAttachmentMessage(_pluginConfig.WipeWebhook, message, attachments);
-#else
-            SendDiscordMessage(_pluginConfig.WipeWebhook, message);
-#endif
         }
-
-        private void SendProtocol()
-        {
-            if (string.IsNullOrEmpty(_pluginConfig.ProtocolWebhook) || _pluginConfig.ProtocolWebhook == DefaultUrl)
-            {
-                return;
-            }
-            
-            DiscordMessage message = ParseMessage(_pluginConfig.ProtocolEmbed);
-#if RUST
-            List<Attachment> attachments = new List<Attachment>();
-            if (RustMapApi != null && _pluginConfig.ProtocolEmbed.Embed.Image == MapAttachment)
-            {
-                Hash<string, object> map = RustMapApi.Call<Hash<string, object>>("GetFullMap");
-                byte[] mapData = map?["image"] as byte[];
-                if (mapData != null)
-                {
-                    attachments.Add(new Attachment(mapData, MapFilename, AttachmentContentType.Jpg));
-                }
-            }
-
-            SendDiscordAttachmentMessage(_pluginConfig.ProtocolWebhook, message, attachments);
-#else
-            SendDiscordMessage(_pluginConfig.ProtocolWebhook, message);
-#endif
-        }
-        #endregion
+        #endif
         
         #region PlaceholderAPI
         private string ParseFields(string json)
         {
             StringBuilder sb = new StringBuilder(json);
 
-            GetReplacer()?.Invoke(null, sb);
+            GetReplacer()?.Invoke(null, sb, false);
 
             return sb.ToString();
         }
@@ -390,25 +396,25 @@ namespace Oxide.Plugins
         
         private void OnPlaceholderAPIReady()
         {
-            RegisterPlaceholder("server.protocol.previous", (player, s) => _previousProtocol, "Displays the previous protocol version if it changed during the last restart");
+            RegisterPlaceholder("server.protocol.previous", (player, s) => _previousProtocol, "Displays the previous protocol version if it changed during the last restart", double.MaxValue);
         }
 
-        private void RegisterPlaceholder(string key, Func<IPlayer, string, object> action, string description = null)
+        private void RegisterPlaceholder(string key, Func<IPlayer, string, object> action, string description = null, double ttl = double.NaN)
         {
             if (IsPlaceholderApiLoaded())
             {
-                PlaceholderAPI.Call("AddPlaceholder", this, key, action, description);
+                PlaceholderAPI.Call("AddPlaceholder", this, key, action, description, ttl);
             }
         }
         
-        private Action<IPlayer, StringBuilder> GetReplacer()
+        private Action<IPlayer, StringBuilder, bool> GetReplacer()
         {
             if (!IsPlaceholderApiLoaded())
             {
                 return _replacer;
             }
             
-            return _replacer ?? (_replacer = PlaceholderAPI.Call<Action<IPlayer, StringBuilder>>("GetProcessPlaceholders"));
+            return _replacer ?? (_replacer = PlaceholderAPI.Call<Action<IPlayer, StringBuilder, bool>>("GetProcessPlaceholders", 1));
         }
 
         private bool IsPlaceholderApiLoaded() => PlaceholderAPI != null && PlaceholderAPI.IsLoaded;
@@ -417,7 +423,7 @@ namespace Oxide.Plugins
         #region Helpers
         private void Debug(DebugEnum level, string message)
         {
-            if ((int) level <= (int) _pluginConfig.DebugLevel)
+            if (level <= _pluginConfig.DebugLevel)
             {
                 Puts($"{level}: {message}");
             }
@@ -435,6 +441,8 @@ namespace Oxide.Plugins
                 throw;
             }
         }
+
+        private bool IsRustMapApiReady() => RustMapApi != null && RustMapApi.IsLoaded && RustMapApi.Call<bool>("IsReady");
         
         private void SaveData() => Interface.Oxide.DataFileSystem.WriteObject(Name, _storedData);
 
@@ -453,6 +461,12 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Command")]
             public string Command { get; set; }
             
+#if RUST
+            [DefaultValue("Icons")]
+            [JsonProperty(PropertyName = "Map Render Name")]
+            public string MapName { get; set; }
+#endif
+            
             [DefaultValue(DefaultUrl)]
             [JsonProperty(PropertyName = "Wipe Webhook url")]
             public string WipeWebhook { get; set; }
@@ -466,12 +480,6 @@ namespace Oxide.Plugins
             
             [JsonProperty(PropertyName = "Protocol message")]
             public DiscordMessageConfig ProtocolEmbed { get; set; }
-
-#if RUST
-            [DefaultValue("Icons")]
-            [JsonProperty(PropertyName = "Map Render Name")]
-            public string MapName { get; set; }
-#endif
         }
         
         private class StoredData
@@ -763,11 +771,11 @@ namespace Oxide.Plugins
                 Description = description;
                 return this;
             }
-            
+
             /// <summary>
-            /// Adds a description to the embed message
+            /// Adds a url to the embed message
             /// </summary>
-            /// <param name="description">description to add</param>
+            /// <param name="url"></param>
             /// <returns>This</returns>
             public Embed AddUrl(string url)
             {
