@@ -29,9 +29,9 @@ jobs:
           echo "Latest version on uMod: $latest_version"
           echo "Download URL: $download_url"
 
-          # Setting outputs for further steps
-          echo "::set-output name=latest_version::$latest_version"
-          echo "::set-output name=download_url::$download_url"
+          # Use environment files to share data between steps
+          echo "latest_version=$latest_version" >> $GITHUB_ENV
+          echo "download_url=$download_url" >> $GITHUB_ENV
 
       - name: Get latest GitHub release version
         id: get_latest_release
@@ -43,7 +43,7 @@ jobs:
           current_version=${latest_tag#v}
 
           echo "Latest GitHub release version: $current_version"
-          echo "::set-output name=current_version::$current_version"
+          echo "current_version=$current_version" >> $GITHUB_ENV
 
       - name: Compare versions
         id: compare
@@ -57,14 +57,14 @@ jobs:
           # Compare versions
           if [ "$current_version" != "$latest_version" ]; then
             echo "New version found: $latest_version"
-            echo "::set-output name=new_version::true"
+            echo "new_version=true" >> $GITHUB_ENV
           else
             echo "No new version"
-            echo "::set-output name=new_version::false"
+            echo "new_version=false" >> $GITHUB_ENV
           fi
 
       - name: Download new plugin version
-        if: steps.compare.outputs.new_version == 'true'
+        if: env.new_version == 'true'
         run: |
           download_url="${{ steps.fetch_umod.outputs.download_url }}"
           
@@ -79,7 +79,7 @@ jobs:
           git push
 
       - name: Create GitHub release
-        if: steps.compare.outputs.new_version == 'true'
+        if: env.new_version == 'true'
         env:
             GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
