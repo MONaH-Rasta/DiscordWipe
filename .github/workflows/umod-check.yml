@@ -43,8 +43,8 @@ jobs:
       - name: Compare versions
         id: compare
         run: |
-          current_version="${{ steps.get_latest_release.outputs.current_version }}"
-          plugin_version="${{ steps.extract_version.outputs.plugin_version }}"
+          current_version="${{ env.current_version }}"
+          plugin_version="${{ env.plugin_version }}"
 
           echo "Current version in repo: $current_version"
           echo "Latest version in plugin file: $plugin_version"
