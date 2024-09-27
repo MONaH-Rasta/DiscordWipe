@@ -19,7 +19,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.2.0")]
+    [Info("Discord Wipe", "MJSU", "2.2.1")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -282,7 +282,10 @@ namespace Oxide.Plugins
             else if (_storedData.Protocol != _protocol)
             {
                 Debug(DebugEnum.Info, $"HandleStartup - Protocol has changed {_storedData.Protocol} -> {_protocol}");
-                SendProtocol();
+                if (_pluginConfig.SendProtocolAutomatically)
+                {
+                    SendProtocol();
+                }
                 _storedData.Protocol = _protocol;
                 SaveData();
                 Puts("Protocol notification sent");
@@ -290,9 +293,12 @@ namespace Oxide.Plugins
             
             if (_storedData.IsWipe)
             {
-                Debug(DebugEnum.Info, "HandleStartup - IsWipe is set. Sending wipe message.");
-                SendWipe();
-                Puts("Wipe notification sent");
+                if (_pluginConfig.SendWipeAutomatically)
+                {
+                    Debug(DebugEnum.Info, "HandleStartup - IsWipe is set. Sending wipe message.");
+                    SendWipe();
+                    Puts("Wipe notification sent");
+                }
                 _storedData.IsWipe = false;
                 SaveData();
             }
@@ -592,9 +598,17 @@ namespace Oxide.Plugins
             public RustMapImageSettings ImageSettings { get; set; }
 #endif
             
+            [DefaultValue(true)]
+            [JsonProperty(PropertyName = "Send wipe message when server wipes")]
+            public bool SendWipeAutomatically { get; set; }
+            
             [DefaultValue(DefaultUrl)]
             [JsonProperty(PropertyName = "Wipe Webhook url")]
             public string WipeWebhook { get; set; }
+            
+            [DefaultValue(true)]
+            [JsonProperty(PropertyName = "Send protocol message when server protocol changes")]
+            public bool SendProtocolAutomatically { get; set; }
             
             [DefaultValue(DefaultUrl)]
             [JsonProperty(PropertyName = "Protocol Webhook url")]
