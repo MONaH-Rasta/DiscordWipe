@@ -19,6 +19,7 @@ jobs:
           UMOD_API_URL="https://umod.org/plugins/discord-wipe.json"
           
           response=$(curl -s $UMOD_API_URL)
+          echo "$response"
           latest_version=$(echo "$response" | jq -r '.latest_release_version')
           download_url=$(echo "$response" | jq -r '.download_url')
 
