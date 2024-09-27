@@ -18,7 +18,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.0.6")]
+    [Info("Discord Wipe", "MJSU", "2.0.7")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -211,6 +211,7 @@ namespace Oxide.Plugins
         
         private void OnServerInitialized()
         {
+            _protocol = GetProtocol();
             timer.In(5f, () => HandleStartup());
         }
 
@@ -228,7 +229,6 @@ namespace Oxide.Plugins
                 PrintWarning("RustMapApi failed to be ready in time. Skipping map image.");
             }
             
-            _protocol = GetProtocol();
             if (string.IsNullOrEmpty(_storedData.Protocol))
             {
                 _storedData.Protocol = _protocol;
@@ -308,7 +308,7 @@ namespace Oxide.Plugins
             }
             
             DiscordMessage message = ParseMessage(_pluginConfig.WipeEmbed);
-            
+
 #if RUST
             List<Attachment> attachments = new List<Attachment>();
             
@@ -552,7 +552,7 @@ namespace Oxide.Plugins
 
             if (www.isNetworkError || www.isHttpError)
             {
-                PrintError($"{www.error}");
+                PrintError($"{www.error} {www.downloadHandler.text}");
             }
         }
 #endif
