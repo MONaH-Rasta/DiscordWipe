@@ -19,7 +19,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.1.8")]
+    [Info("Discord Wipe", "MJSU", "2.1.9")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -34,6 +34,7 @@ namespace Oxide.Plugins
         private const string AdminPermission = "discordwipe.admin";
         private const string MapAttachment = "attachment://" + MapFilename;
         private const string MapFilename = "map.jpg";
+        private const int MaxImageSize = 8 * 1024 * 1024;
         
         private string _protocol;
         private string _previousProtocol;
@@ -41,6 +42,7 @@ namespace Oxide.Plugins
         private Action<IPlayer, StringBuilder, bool> _replacer;
         
         private enum DebugEnum {Message, None, Error, Warning, Info}
+        private enum EncodingMode {Jpg = 1, Png = 2}
         #endregion
 
         #region Setup & Loading
@@ -188,6 +190,16 @@ namespace Oxide.Plugins
                     Enabled = config.ProtocolEmbed?.Embed?.Enabled ?? true
                 }
             };
+
+#if RUST
+            config.ImageSettings = new RustMapImageSettings
+            {
+                Name = config.ImageSettings?.Name ?? "Icons",
+                Scale = config.ImageSettings?.Scale ?? 0.5f,
+                FileType = config.ImageSettings?.FileType ?? EncodingMode.Jpg
+            };        
+#endif
+            
             return config;
         }
         
@@ -200,15 +212,24 @@ namespace Oxide.Plugins
                 return;
             }
             
-            if(PlaceholderAPI.Version < new VersionNumber(2, 0, 0))
+            if(PlaceholderAPI.Version < new VersionNumber(2, 2, 0))
             {
-                PrintError("Placeholder API plugin must be version 2.0.0 or higher");
+                PrintError("Placeholder API plugin must be version 2.2.0 or higher");
                 return;
             }
 
-            if (!IsRustMapApiReady())
+            if (IsRustMapApiLoaded())
             {
-                return;
+                if(RustMapApi.Version < new VersionNumber(1,3,2))
+                {
+                    PrintError("RustMapApi plugin must be version 1.3.2 or higher");
+                    return;
+                }
+                
+                if (!IsRustMapApiReady())
+                {
+                    return;
+                }
             }
 
             HandleStartup();
@@ -349,28 +370,52 @@ namespace Oxide.Plugins
         #if RUST
         private void AttachMap(List<Attachment> attachments, DiscordMessageConfig messageConfig)
         {
-            if (IsRustMapApiReady() && messageConfig.Embed.Image == MapAttachment)
+            if (IsRustMapApiLoaded() && IsRustMapApiReady() && messageConfig.Embed.Image == MapAttachment)
             {
                 Debug(DebugEnum.Info, "AttachMap - RustMapApi is ready, attaching map");
                 List<string> maps = RustMapApi.Call<List<string>>("GetSavedMaps");
-                string mapName = _pluginConfig.MapName;
+                string mapName = _pluginConfig.ImageSettings.Name;
                 if (maps != null)
                 {
                     mapName = maps.FirstOrDefault(m => m.Equals(mapName, StringComparison.InvariantCultureIgnoreCase));
                     if (string.IsNullOrEmpty(mapName))
                     {
-                        PrintWarning($"Map name not found {_pluginConfig.MapName}. Valid names are {string.Join(", ", maps.ToArray())}");
+                        PrintWarning($"Map name not found {_pluginConfig.ImageSettings.Name}. Valid names are {string.Join(", ", maps.ToArray())}");
                         mapName = "Icons";
                     }
                 }
                 
                 Debug(DebugEnum.Info, $"AttachMap - RustMapApi map name set to: {mapName}");
-                Hash<string, object> map = RustMapApi.Call<Hash<string, object>>("GetFullMap", mapName);
+                int resolution = (int) (World.Size * _pluginConfig.ImageSettings.Scale);
+                AttachmentContentType contentType = _pluginConfig.ImageSettings.FileType == EncodingMode.Jpg ? AttachmentContentType.Jpg : AttachmentContentType.Png; 
+                object response = RustMapApi.Call("CreatePluginImage", this, mapName, resolution, (int)_pluginConfig.ImageSettings.FileType);
+                if (response is string)
+                {
+                    PrintError($"An error occurred creating the plugin image: {response}");
+                    return;
+                }
+
+                Hash<string, object> map = response as Hash<string, object>;
                 byte[] mapData = map?["image"] as byte[];
                 if (mapData != null)
                 {
-                    attachments.Add(new Attachment(mapData, MapFilename, AttachmentContentType.Jpg));
-                    Debug(DebugEnum.Info, "AttachMap - Successfully attached map");
+                    if (mapData.Length >= 8 * 1024 * 1024)
+                    {
+                        PrintError( "Map Image too large. " +
+                                               $"Image size is {mapData.Length / 1024.0 / 1024.0:0.00}MB. " +
+                                               $"Max size is {MaxImageSize / 1024 / 1024}MB. " +
+                                               "Please reduce the \"Image Resolution Scale\"");
+                    }
+                    else
+                    {
+                        attachments.Add(new Attachment(mapData, MapFilename, contentType));
+                        Debug(DebugEnum.Info, "AttachMap - Successfully attached map");
+                    }
+                    
+                }
+                else
+                {
+                    Debug(DebugEnum.Warning, "AttachMap - MapData was null!!!");
                 }
             }
         }
@@ -423,9 +468,22 @@ namespace Oxide.Plugins
         #region Helpers
         private void Debug(DebugEnum level, string message)
         {
-            if (level <= _pluginConfig.DebugLevel)
+            if (level > _pluginConfig.DebugLevel)
             {
-                Puts($"{level}: {message}");
+                return;
+            }
+
+            switch (level)
+            {
+                case DebugEnum.Error:
+                    PrintError(message);
+                    break;
+                case DebugEnum.Warning:
+                    PrintWarning(message);
+                    break;
+                default:
+                    Puts($"{level}: {message}");
+                    break;
             }
         }
 
@@ -442,7 +500,8 @@ namespace Oxide.Plugins
             }
         }
 
-        private bool IsRustMapApiReady() => RustMapApi != null && RustMapApi.IsLoaded && RustMapApi.Call<bool>("IsReady");
+        private bool IsRustMapApiLoaded() => RustMapApi != null && RustMapApi.IsLoaded;
+        private bool IsRustMapApiReady() => RustMapApi.Call<bool>("IsReady");
         
         private void SaveData() => Interface.Oxide.DataFileSystem.WriteObject(Name, _storedData);
 
@@ -453,7 +512,7 @@ namespace Oxide.Plugins
         private class PluginConfig
         {
             [JsonConverter(typeof(StringEnumConverter))]
-            [DefaultValue(DebugEnum.None)]
+            [DefaultValue(DebugEnum.Warning)]
             [JsonProperty(PropertyName = "Debug Level (None, Error, Warning, Info)")]
             public DebugEnum DebugLevel { get; set; }
             
@@ -462,9 +521,8 @@ namespace Oxide.Plugins
             public string Command { get; set; }
             
 #if RUST
-            [DefaultValue("Icons")]
-            [JsonProperty(PropertyName = "Map Render Name")]
-            public string MapName { get; set; }
+            [JsonProperty(PropertyName = "Rust Map Image Settings")]
+            public RustMapImageSettings ImageSettings { get; set; }
 #endif
             
             [DefaultValue(DefaultUrl)]
@@ -481,6 +539,24 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Protocol message")]
             public DiscordMessageConfig ProtocolEmbed { get; set; }
         }
+
+#if RUST
+        private class RustMapImageSettings
+        {
+            [DefaultValue("Icons")]
+            [JsonProperty(PropertyName = "Render Name")]
+            public string Name { get; set; }
+            
+            [DefaultValue(0.5f)]
+            [JsonProperty(PropertyName = "Image Resolution Scale")]
+            public float Scale { get; set; }            
+            
+            [JsonConverter(typeof(StringEnumConverter))]
+            [DefaultValue(EncodingMode.Jpg)]
+            [JsonProperty(PropertyName = "File Type (Jpg, Png")]
+            public EncodingMode FileType { get; set; }
+        }
+#endif
         
         private class StoredData
         {
