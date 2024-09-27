@@ -17,8 +17,8 @@ jobs:
         id: fetch_umod
         run: |
           UMOD_API_URL="https://umod.org/plugins/discord-wipe.json"
+          
           response=$(curl -s $UMOD_API_URL)
-
           latest_version=$(echo "$response" | jq -r '.latest_release_version')
           download_url=$(echo "$response" | jq -r '.download_url')
 
@@ -31,6 +31,7 @@ jobs:
       - name: Get latest GitHub release version
         id: get_latest_release
         run: |
+          git fetch --tags
           latest_tag=$(git describe --tags $(git rev-list --tags --max-count=1) 2>/dev/null || echo "v0.0.0")
           current_version=${latest_tag#v}
 
@@ -44,24 +45,20 @@ jobs:
 
           echo "Current version in repo: $current_version"
           echo "Latest version from uMod: $latest_version"
-
+          
           if [ "$current_version" != "$latest_version" ]; then
             echo "New version found: $latest_version"
             echo "new_version=true" >> $GITHUB_ENV
           else
             echo "No new version"
             echo "new_version=false" >> $GITHUB_ENV
-          fi
 
       - name: Download new plugin version
         if: env.new_version == 'true'
         run: |
           download_url="${{ env.download_url }}"
-
-          # Downloading new plugin version
           curl -o DiscordWipe.cs "$download_url"
-
-          # Commit the new version to the repository
+          
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
           git add DiscordWipe.cs
@@ -73,7 +70,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "v${{ env.latest_version }}" \
-            DiscordWipe.cs \
+          gh release create "v${{ env.latest_version }}" DiscordWipe.cs \
             --title "DiscordWipe v${{ env.latest_version }}" \
             --notes "Automatic release of new version from uMod."
