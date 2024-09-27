@@ -16,11 +16,12 @@ using UnityEngine;
 #if RUST
 using UnityEngine.Networking;
 using System.Collections;
+using System.IO;
 #endif
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.3.1")]
+    [Info("Discord Wipe", "MJSU", "2.3.2")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -32,6 +33,7 @@ namespace Oxide.Plugins
         private StoredData _storedData; //Plugin Data
 
         private const string DefaultUrl = "https://support.discordapp.com/hc/en-us/articles/228383668-Intro-to-Webhooks";
+        private const string DefaultRustMapsApiKey = "Get Your API Key @ https://rustmaps.com/dashboard";
         private const string AdminPermission = "discordwipe.admin";
         private const string AttachmentBase = "attachment://";
         private const string MapAttachment = AttachmentBase + MapFilename;
@@ -58,6 +60,7 @@ namespace Oxide.Plugins
         #region Setup & Loading
         private void Init()
         {
+            UnsubscribeAll();
             AddCovalenceCommand(_pluginConfig.Command, nameof(SendWipeCommand));
 
             _storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
@@ -84,7 +87,8 @@ namespace Oxide.Plugins
                 }
             }
             
-            _rustMapHeaders["X-API-Key"] = _pluginConfig.ImageSettings.RustMaps.ApiKey;
+            _rustMapGenerateHeaders["X-API-Key"] = _pluginConfig.ImageSettings.RustMaps.ApiKey;
+            _rustMapGetHeaders["X-API-Key"] = _pluginConfig.ImageSettings.RustMaps.ApiKey;
         }
         
         protected override void LoadDefaultMessages()
@@ -316,7 +320,7 @@ namespace Oxide.Plugins
                 }
             }
 
-            if (_pluginConfig.ImageSettings.MapMode == RustMapMode.RustMaps && !string.IsNullOrEmpty(_pluginConfig.ImageSettings.RustMaps.ApiKey))
+            if (_pluginConfig.ImageSettings.MapMode == RustMapMode.RustMaps && !string.IsNullOrEmpty(_pluginConfig.ImageSettings.RustMaps.ApiKey) && _pluginConfig.ImageSettings.RustMaps.ApiKey != DefaultRustMapsApiKey)
             {
                 GetRustMapsMap();
                 timer.In(15 * 60f, HandleStartup);
@@ -324,6 +328,7 @@ namespace Oxide.Plugins
             }
 
             //Delayed so PlaceholderAPI can be ready before we call
+            SubscribeAll();
             timer.In(1f, HandleStartup);
         }
 
@@ -575,18 +580,24 @@ namespace Oxide.Plugins
         #endif
 
         #region RustMaps.com
-        private readonly Dictionary<string, string> _rustMapHeaders = new Dictionary<string, string>()
+        private readonly Dictionary<string, string> _rustMapGenerateHeaders = new Dictionary<string, string>
         {
-            ["Content-Type"] = "application/json"
+            ["Content-Type"] = "application/json",
         };
+        
+        private readonly Dictionary<string, string> _rustMapGetHeaders = new Dictionary<string, string> { };
 
         public void GetRustMapsMap()
         {
             uint seed = World.Seed;
             uint size = World.Size;
+            bool barren = ConVar.Server.level.Equals("Barren", StringComparison.OrdinalIgnoreCase);
             
-            Debug(DebugEnum.Info, "RustMaps.com Requesting Rust Map.");
-            webrequest.Enqueue($"https://rustmaps.com/api/v2/maps/{seed}/{size}?staging={_pluginConfig.ImageSettings.RustMaps.Staging}", null, RustMapsGetCallback, this, RequestMethod.GET, _rustMapHeaders);
+            string url = $"https://api.rustmaps.com/v4/maps/{size}/{seed}?staging={_pluginConfig.ImageSettings.RustMaps.Staging}&barren={barren}";
+
+            Debug(DebugEnum.Info, $"RustMaps.com Requesting Rust Map. Url: {url}");
+
+            webrequest.Enqueue(url, null, RustMapsGetCallback, this, RequestMethod.GET, _rustMapGetHeaders);
         }
 
         private void RustMapsGetCallback(int code, string response)
@@ -616,16 +627,24 @@ namespace Oxide.Plugins
 
         public void RustMapsRequestMap()
         {
-            uint seed = World.Seed;
-            uint size = World.Size;
-            
             Debug(DebugEnum.Info, "RustMaps.com Generating Rust Map.");
-            webrequest.Enqueue($"https://rustmaps.com/api/v2/maps/{seed}/{size}?staging={_pluginConfig.ImageSettings.RustMaps.Staging}", "{}", RustMapsPostCallback, this, RequestMethod.POST, _rustMapHeaders);
+            RustMapsApiRequest request = new RustMapsApiRequest
+            {
+                Size = World.Size,
+                Seed = World.Seed,
+                Staging = _pluginConfig.ImageSettings.RustMaps.Staging,
+                Barren = ConVar.Server.level.Equals("Barren", StringComparison.OrdinalIgnoreCase)
+            };
+
+            string json = JsonConvert.SerializeObject(request);
+            Debug(DebugEnum.Info, json);
+            
+            webrequest.Enqueue("https://api.rustmaps.com/v4/maps", json, RustMapsPostCallback, this, RequestMethod.POST, _rustMapGenerateHeaders);
         }
 
         private void RustMapsPostCallback(int code, string response)
         {
-            if (code == 200)
+            if (code == 201)
             {
                 Debug(DebugEnum.Info, "RustMaps.com image requested successfully.");
                 timer.In(60f, GetRustMapsMap);
@@ -663,9 +682,9 @@ namespace Oxide.Plugins
         private void OnPlaceholderAPIReady()
         {
             RegisterPlaceholder("server.protocol.previous", (player, s) => _previousProtocol, "Displays the previous protocol version if it changed during the last restart", double.MaxValue);
-            RegisterPlaceholder("rustmaps.com.map", (player, s) => _rustMapsResponse?.ImageUrl ?? string.Empty, "RustMaps.com map image url", double.MaxValue);
-            RegisterPlaceholder("rustmaps.com.icons", (player, s) => _rustMapsResponse?.ImageIconUrl ?? string.Empty, "RustMaps.com icon map image url", double.MaxValue);
-            RegisterPlaceholder("rustmaps.com.thumbnail", (player, s) => _rustMapsResponse?.ThumbnailUrl ?? string.Empty, "RustMaps.com thumbnail map image url", double.MaxValue);
+            RegisterPlaceholder("rustmaps.com.map", (player, s) => _rustMapsResponse?.Data?.ImageUrl ?? string.Empty, "RustMaps.com map image url", double.MaxValue);
+            RegisterPlaceholder("rustmaps.com.icons", (player, s) => _rustMapsResponse?.Data?.ImageIconUrl ?? string.Empty, "RustMaps.com icon map image url", double.MaxValue);
+            RegisterPlaceholder("rustmaps.com.thumbnail", (player, s) => _rustMapsResponse?.Data?.ThumbnailUrl ?? string.Empty, "RustMaps.com thumbnail map image url", double.MaxValue);
         }
 
         private void RegisterPlaceholder(string key, Func<IPlayer, string, object> action, string description = null, double ttl = double.NaN)
@@ -690,6 +709,16 @@ namespace Oxide.Plugins
         #endregion
 
         #region Helpers
+        public void UnsubscribeAll()
+        {
+            Unsubscribe(nameof(OnRustMapApiReady));
+        }
+
+        public void SubscribeAll()
+        {
+            Subscribe(nameof(OnRustMapApiReady));
+        }
+        
         private void Debug(DebugEnum level, string message)
         {
             if (level > _pluginConfig.DebugLevel)
@@ -787,6 +816,22 @@ namespace Oxide.Plugins
                 return ProtocolEmbed != null;
             }
         }
+        
+        public class RustMapsApiRequest
+        {
+            [JsonProperty("size")]
+            public uint Size { get; set; }
+
+            [JsonProperty("seed")]
+            public uint Seed { get; set; }
+
+            [JsonProperty("staging")]
+            public bool Staging { get; set; }
+
+            [JsonProperty("barren")]
+            public bool Barren { get; set; }
+        }
+
 
 #if RUST
         private class RustMapImageSettings
@@ -826,8 +871,14 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "File Type (Jpg, Png")]
             public EncodingMode FileType { get; set; }
         }
-        
+
         public class RustMapsResponse
+        {
+            [JsonProperty("data")]
+            public RustMapsData Data { get; set; }
+        }
+        
+        public class RustMapsData
         {
             [JsonProperty("imageUrl")]
             public string ImageUrl { get; set; }
