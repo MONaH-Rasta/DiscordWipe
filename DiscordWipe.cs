@@ -20,7 +20,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.3.0")]
+    [Info("Discord Wipe", "MJSU", "2.3.1")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -67,6 +67,23 @@ namespace Oxide.Plugins
             
             _pluginConfig.ProtocolWebhook = _pluginConfig.ProtocolWebhook.Replace("/api/webhooks", "/api/v9/webhooks");
             _pluginConfig.WipeWebhook = _pluginConfig.WipeWebhook.Replace("/api/webhooks", "/api/v9/webhooks");
+
+            foreach (DiscordMessageConfig embed in _pluginConfig.WipeEmbeds)
+            {
+                if (!string.IsNullOrEmpty(embed.WebhookOverride) && embed.WebhookOverride != DefaultUrl)
+                {
+                    embed.WebhookOverride = embed.WebhookOverride.Replace("/api/webhooks", "/api/v9/webhooks");
+                }
+            }
+            
+            foreach (DiscordMessageConfig embed in _pluginConfig.ProtocolEmbeds)
+            {
+                if (!string.IsNullOrEmpty(embed.WebhookOverride) && embed.WebhookOverride != DefaultUrl)
+                {
+                    embed.WebhookOverride = embed.WebhookOverride.Replace("/api/webhooks", "/api/v9/webhooks");
+                }
+            }
+            
             _rustMapHeaders["X-API-Key"] = _pluginConfig.ImageSettings.RustMaps.ApiKey;
         }
         
@@ -226,7 +243,23 @@ namespace Oxide.Plugins
                 }
             };
 #endif
+
+            foreach (DiscordMessageConfig embed in config.WipeEmbeds)
+            {
+                if (string.IsNullOrEmpty(embed.WebhookOverride))
+                {
+                    embed.WebhookOverride = DefaultUrl;
+                }
+            }
             
+            foreach (DiscordMessageConfig embed in config.ProtocolEmbeds)
+            {
+                if (string.IsNullOrEmpty(embed.WebhookOverride))
+                {
+                    embed.WebhookOverride = DefaultUrl;
+                }
+            }
+
             return config;
         }
         
@@ -466,12 +499,17 @@ namespace Oxide.Plugins
 #if RUST
                     List<Attachment> attachments = new List<Attachment>();
 
-                    Debug(DebugEnum.Info, $"SendMessage - MapMode{_pluginConfig.ImageSettings.MapMode.ToString()}");
+                    Debug(DebugEnum.Info, $"SendMessage - MapMode={_pluginConfig.ImageSettings.MapMode.ToString()}");
                     if (_pluginConfig.ImageSettings.MapMode == RustMapMode.RustMapApi)
                     {
                         AttachMap(attachments, messageConfig);
                     }
 
+                    if (!string.IsNullOrEmpty(messageConfig.WebhookOverride) && messageConfig.WebhookOverride != DefaultUrl)
+                    {
+                        url = messageConfig.WebhookOverride;
+                    }
+                    
                     SendDiscordAttachmentMessage(url, message, attachments);
 #else
                 SendDiscordMessage(url, message);
@@ -1491,6 +1529,9 @@ namespace Oxide.Plugins
         public class DiscordMessageConfig
         {
             public string Content { get; set; }
+            
+            [JsonProperty("Webhook Override (Overrides the default webhook for this message)")]
+            public string WebhookOverride { get; set; }
             
             [JsonProperty("Send Mode (Always, Random)")]
             [JsonConverter(typeof(StringEnumConverter))]
