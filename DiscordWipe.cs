@@ -1,30 +1,36 @@
 ﻿using System.ComponentModel;
 using Newtonsoft.Json;
-using Oxide.Core;
 using Oxide.Core.Plugins;
+
+#if RUST
+    using Oxide.Core;
+#endif
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "0.12.0")]
+    [Info("Discord Wipe", "MJSU", "1.0.1")]
     [Description("Sends a notification to a discord channel when the server wipes")]
     internal class DiscordWipe : CovalencePlugin
     {
         #region Class Fields
         [PluginReference] private Plugin DiscordCore;
-
+        
+#if RUST
         private StoredData _storedData; //Plugin Data
+#endif
+        
         private PluginConfig _pluginConfig;
 
         private bool _isWipe;
         #endregion
 
         #region Setup & Loading
+#if RUST
         private void Init()
         {
-#if RUST
             _storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
-#endif
         }
+#endif
 
         private void OnServerInitialized()
         {
@@ -92,9 +98,11 @@ namespace Oxide.Plugins
         }
         #endregion
 
+#if RUST
         #region Helper Methods
         private void SaveData() => Interface.Oxide.DataFileSystem.WriteObject(Name, _storedData);
         #endregion
+#endif
 
         #region Classes
         private class PluginConfig
@@ -114,9 +122,7 @@ namespace Oxide.Plugins
             [DefaultValue("@everyone The SERVERNAME server has wiped! Join Now!")]
             [JsonProperty(PropertyName = "Wipe Text")]
             public string WipeText { get; set; }
-
-#if RUST
-            
+#if RUST           
             [DefaultValue(true)]
             [JsonProperty(PropertyName = "Send on Protocol Change")]
             public bool ProtocolChange { get; set; }
@@ -124,14 +130,15 @@ namespace Oxide.Plugins
             [DefaultValue("The rust server has been updated to protocol {0}")]
             [JsonProperty(PropertyName = "Protocol Text")]
             public string ProtocolText { get; set; }
-
 #endif
         }
-
+#if RUST
         private class StoredData
         {
             public int Protocol { get; set; }
         }
+#endif
+
         #endregion
     }
 }
