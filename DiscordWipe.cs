@@ -19,7 +19,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.1.3")]
+    [Info("Discord Wipe", "MJSU", "2.1.4")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -90,6 +90,7 @@ namespace Oxide.Plugins
                 {
                     Title = config.WipeEmbed?.Embed?.Title ?? "{server.name}",
                     Description = config.WipeEmbed?.Embed?.Description ?? "The server has wiped!",
+                    Url = config.WipeEmbed?.Embed?.Url ?? string.Empty,
                     Color = config.WipeEmbed?.Embed?.Color ?? "#de8732",
                     Image = config.WipeEmbed?.Embed?.Image ?? MapAttachment,
                     Thumbnail = config.WipeEmbed?.Embed?.Thumbnail ?? string.Empty,
@@ -143,6 +144,7 @@ namespace Oxide.Plugins
                 {
                     Title = config.ProtocolEmbed?.Embed?.Title ?? "{server.name}",
                     Description = config.ProtocolEmbed?.Embed?.Description ?? "The server protocol has changed!",
+                    Url = config.ProtocolEmbed?.Embed?.Url ?? string.Empty,
                     Color = config.ProtocolEmbed?.Embed?.Color ?? "#de8732",
                     Image = config.ProtocolEmbed?.Embed?.Image ?? string.Empty,
                     Thumbnail = config.ProtocolEmbed?.Embed?.Thumbnail ?? string.Empty,
@@ -266,7 +268,7 @@ namespace Oxide.Plugins
         #region Command
         private bool SendWipeCommand(IPlayer player, string cmd, string[] args)
         {
-            if (!player.IsAdmin && !HasPermission(player, AdminPermission))
+            if (!HasPermission(player, AdminPermission))
             {
                 player.Message(Lang(LangKeys.NoPermission, player));
                 return true;
@@ -703,6 +705,12 @@ namespace Oxide.Plugins
             /// </summary>
             [JsonProperty("description")]
             private string Description { get; set; }
+            
+            /// <summary>
+            /// Description of the embed message
+            /// </summary>
+            [JsonProperty("url")]
+            private string Url { get; set; }
 
             /// <summary>
             /// Image to added to the embed message. Appears at the bottom of the message above the footer
@@ -753,6 +761,17 @@ namespace Oxide.Plugins
             public Embed AddDescription(string description)
             {
                 Description = description;
+                return this;
+            }
+            
+            /// <summary>
+            /// Adds a description to the embed message
+            /// </summary>
+            /// <param name="description">description to add</param>
+            /// <returns>This</returns>
+            public Embed AddUrl(string url)
+            {
+                Url = url;
                 return this;
             }
 
@@ -1154,6 +1173,9 @@ namespace Oxide.Plugins
             [JsonProperty("Description")]
             public string Description { get; set; }
             
+            [JsonProperty("Url")]
+            public string Url { get; set; }
+            
             [JsonProperty("Embed Color")]
             public string Color { get; set; }
             
@@ -1219,6 +1241,11 @@ namespace Oxide.Plugins
                 if (!string.IsNullOrEmpty(config.Embed.Description))
                 {
                     embed.AddDescription(config.Embed.Description);
+                }
+                
+                if (!string.IsNullOrEmpty(config.Embed.Url))
+                {
+                    embed.AddUrl(config.Embed.Url);
                 }
 
                 if (!string.IsNullOrEmpty(config.Embed.Color))
