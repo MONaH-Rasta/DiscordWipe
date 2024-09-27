@@ -18,7 +18,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.1.0")]
+    [Info("Discord Wipe", "MJSU", "2.1.1")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -370,10 +370,9 @@ namespace Oxide.Plugins
         private string ParseFields(string json)
         {
             StringBuilder sb = new StringBuilder(json);
-            
+
             GetReplacer()?.Invoke(null, sb);
-            
-            sb.Replace("\\n", "\n");
+
             return sb.ToString();
         }
         
@@ -517,7 +516,9 @@ namespace Oxide.Plugins
         /// <param name="files">Attachments to be added to the DiscordMessage</param>
         private void SendDiscordAttachmentMessage(string url, DiscordMessage message, List<Attachment> files)
         {
+            Puts(message.ToJson());
             string json = ParseFields( message.ToJson());
+            Puts("--------------------\n" + json);
             List<IMultipartFormSection> formData = new List<IMultipartFormSection>
             {
                 new MultipartFormDataSection("payload_json", json)
@@ -1126,6 +1127,9 @@ namespace Oxide.Plugins
         
         private class EmbedConfig
         {
+            [JsonProperty("Enabled")]
+            public bool Enabled { get; set; }
+            
             [JsonProperty("Title")]
             public string Title { get; set; }
             
@@ -1146,9 +1150,6 @@ namespace Oxide.Plugins
             
             [JsonProperty("Footer")]
             public FooterConfig Footer { get; set; }
-            
-            [JsonProperty("Enabled")]
-            public bool Enabled { get; set; }
         }
         
         private class FieldConfig
