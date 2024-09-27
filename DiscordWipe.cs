@@ -20,7 +20,7 @@ using System.IO;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.3.3")]
+    [Info("Discord Wipe", "MJSU", "2.3.4")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -319,30 +319,33 @@ namespace Oxide.Plugins
                 
                 if (!IsRustMapApiReady())
                 {
+                    Debug(DebugEnum.Info, "Waiting for Rust Maps Api Plugin to be Ready");
+                    SubscribeAll();
                     return;
                 }
             }
 
             if (_pluginConfig.ImageSettings.MapMode == RustMapMode.RustMaps && !string.IsNullOrEmpty(_pluginConfig.ImageSettings.RustMaps.ApiKey) && _pluginConfig.ImageSettings.RustMaps.ApiKey != DefaultRustMapsApiKey)
             {
+                Debug(DebugEnum.Info, "Loading Map from RustMaps.com");
                 GetRustMapsMap();
-                timer.In(15 * 60f, HandleStartup);
+                //timer.In(15 * 60f, HandleStartup);
                 return;
             }
 #endif
 
             //Delayed so PlaceholderAPI can be ready before we call
-            SubscribeAll();
-            timer.In(1f, HandleStartup);
+            timer.In(1f, () => HandleStartup("OnServerInit"));
         }
 
         private void OnRustMapApiReady()
         {
-            HandleStartup();
+            HandleStartup("OnRustMapApiReady");
         }
         
-        private void HandleStartup()
+        private void HandleStartup(string source)
         {
+            Debug(DebugEnum.Info, $"HandleStartup - {source}");
             if (_hasStarted)
             {
                 return;
@@ -375,6 +378,10 @@ namespace Oxide.Plugins
                     Debug(DebugEnum.Info, "HandleStartup - IsWipe is set. Sending wipe message.");
                     SendWipe();
                     Puts("Wipe notification sent");
+                }
+                else
+                {
+                    Debug(DebugEnum.Info, "SendWipeAutomatically is disabled");
                 }
                 _storedData.IsWipe = false;
                 SaveData();
@@ -475,7 +482,7 @@ namespace Oxide.Plugins
             Debug(DebugEnum.Info, "SendProtocol - Sending protocol message");
             if (string.IsNullOrEmpty(_pluginConfig.ProtocolWebhook) || _pluginConfig.ProtocolWebhook == DefaultUrl)
             {
-                Debug(DebugEnum.Info, "SendProtocol - Protocol message not sent due to Wipe Webhook being blank or matching the default url");
+                Debug(DebugEnum.Info, "SendProtocol - Protocol message not sent due to Protocol Webhook being blank or matching the default url");
                 return;
             }
             
@@ -619,7 +626,7 @@ namespace Oxide.Plugins
             {
                 Debug(DebugEnum.Info, "RustMaps.com map image found.");
                 _rustMapsResponse = JsonConvert.DeserializeObject<RustMapsResponse>(response);
-                HandleStartup();
+                HandleStartup("RustMapsGetCallback");
             }
             else
             {
