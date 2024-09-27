@@ -19,13 +19,13 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.0.13")]
+    [Info("Discord Wipe", "MJSU", "2.0.14")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
         #region Class Fields
 
-        [PluginReference] private Plugin RustMapApi, PlaceholderAPI;
+        [PluginReference] private Plugin RustMapApi, PlaceholderAPI, RustCore;
         
         private PluginConfig _pluginConfig; //Plugin Config
         private StoredData _storedData; //Plugin Data
@@ -54,6 +54,11 @@ namespace Oxide.Plugins
         private const string MapVersion = "{MapVersion}";
         private const string BpVersion = "{BpVersion}";
         private const string OxideVersion = "{OxideVersion}";
+        private const string RustVersion = "{RustVersion}";
+        private const string SystemRamMb = "{SystemRamMB}";
+        private const string SystemRamGb = "{SystemRamGB}";
+        private const string UsedRamMb = "{UsedRamMB}";
+        private const string UsedRamGb = "{UsedRamGb}";
         private const string MapAttachment = "attachment://map.jpg";
         private const string MapFilename = "map.jpg";
         
@@ -393,6 +398,9 @@ namespace Oxide.Plugins
                     .Replace(WipeTime, SaveRestore.SaveCreatedTime.ToString(_pluginConfig.TimeFormat))
                     .Replace(MapVersion, Rust.Protocol.save.ToString())
                     .Replace(BpVersion, Rust.Protocol.persistance.ToString())
+                    .Replace(RustVersion, RustCore.Version.ToString())
+                    .Replace(UsedRamMb, Performance.current.memoryUsageSystem.ToString("0"))
+                    .Replace(UsedRamGb, (Performance.current.memoryUsageSystem / 1024).ToString())
             ;
 #endif
             
@@ -406,6 +414,8 @@ namespace Oxide.Plugins
                     .Replace(Time, DateTime.Now.ToString(_pluginConfig.TimeFormat))
                     .Replace(TimeUtc, DateTime.UtcNow.ToString(_pluginConfig.TimeFormat))
                     .Replace(OxideVersion, OxideMod.Version.ToString())
+                    .Replace(SystemRamMb, SystemInfo.systemMemorySize.ToString())
+                    .Replace(SystemRamGb,Mathf.CeilToInt(SystemInfo.systemMemorySize / 1024.0f).ToString())
                 ;
             
             field = field.Replace("\\n", "\n");
