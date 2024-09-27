@@ -12,19 +12,14 @@ using Oxide.Core.Plugins;
 using UnityEngine;
 
 #if RUST
-using Steamworks;
-using UnityEngine.Networking;
-using System.Collections;
-using Oxide.Game.Rust.Libraries.Covalence;
-#elif HURTWORLD
-using Oxide.Game.Hurtworld.Libraries.Covalence;
+    using Steamworks;
+    using UnityEngine.Networking;
+    using System.Collections;
 #endif
-
-
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.0.10")]
+    [Info("Discord Wipe", "MJSU", "2.0.11")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -219,9 +214,9 @@ namespace Oxide.Plugins
         private void OnServerInitialized()
         {
 #if RUST
-            _consolePlayer = new RustConsolePlayer();
+            _consolePlayer = new Oxide.Game.Rust.Libraries.Covalence.RustConsolePlayer();
 #elif HURTWORLD
-            _consolePlayer = new HurtworldConsolePlayer();
+            _consolePlayer = new Oxide.Game.Hurtworld.Libraries.Covalence.HurtworldConsolePlayer();
 #endif
             
             _protocol = GetProtocol();
