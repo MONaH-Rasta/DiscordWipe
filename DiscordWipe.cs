@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
@@ -10,11 +9,15 @@ using Oxide.Core.Libraries;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
 using UnityEngine;
+
+#if RUST
 using UnityEngine.Networking;
+using System.Collections;
+#endif
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.0.1")]
+    [Info("Discord Wipe", "MJSU", "2.0.2")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -315,7 +318,11 @@ namespace Oxide.Plugins
                 }
             }
 
+#if RUST
             SendDiscordAttachmentMessage(_pluginConfig.WipeWebhook, message, attachments);
+#else
+            SendDiscordMessage(_pluginConfig.WipeWebhook, message);
+#endif
             _isWipe = false;
         }
 
@@ -339,8 +346,11 @@ namespace Oxide.Plugins
                     attachments.Add(new Attachment(mapData, MapFilename, AttachmentContentType.Jpg));
                 }
             }
-
+#if RUST
             SendDiscordAttachmentMessage(_pluginConfig.ProtocolWebhook, message, attachments);
+#else
+            SendDiscordMessage(_pluginConfig.ProtocolWebhook, message);
+#endif
         }
 
         private string ParseField(string field)
@@ -494,6 +504,7 @@ namespace Oxide.Plugins
             }
         }
 
+#if RUST
         /// <summary>
         /// Sends the DiscordMessage to the specified webhook url with attachments
         /// </summary>
@@ -526,6 +537,7 @@ namespace Oxide.Plugins
                 PrintError($"{www.error}");
             }
         }
+#endif
         #endregion
         
         #region Helper Methods
