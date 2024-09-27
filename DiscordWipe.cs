@@ -19,7 +19,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.0.14")]
+    [Info("Discord Wipe", "MJSU", "2.0.15")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -59,6 +59,7 @@ namespace Oxide.Plugins
         private const string SystemRamGb = "{SystemRamGB}";
         private const string UsedRamMb = "{UsedRamMB}";
         private const string UsedRamGb = "{UsedRamGb}";
+        private const string MaxPlayers = "{MaxPlayers}";
         private const string MapAttachment = "attachment://map.jpg";
         private const string MapFilename = "map.jpg";
         
@@ -416,6 +417,7 @@ namespace Oxide.Plugins
                     .Replace(OxideVersion, OxideMod.Version.ToString())
                     .Replace(SystemRamMb, SystemInfo.systemMemorySize.ToString())
                     .Replace(SystemRamGb,Mathf.CeilToInt(SystemInfo.systemMemorySize / 1024.0f).ToString())
+                    .Replace(MaxPlayers,server.MaxPlayers.ToString())
                 ;
             
             field = field.Replace("\\n", "\n");
