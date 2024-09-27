@@ -12,56 +12,32 @@ using Oxide.Core.Plugins;
 using UnityEngine;
 
 #if RUST
-    using Steamworks;
-    using UnityEngine.Networking;
-    using System.Collections;
+using UnityEngine.Networking;
+using System.Collections;
 #endif
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.0.16")]
+    [Info("Discord Wipe", "MJSU", "2.1.0")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
         #region Class Fields
 
-        [PluginReference] private Plugin RustMapApi, PlaceholderAPI, RustCore;
+        [PluginReference] private Plugin RustMapApi, PlaceholderAPI;
         
         private PluginConfig _pluginConfig; //Plugin Config
         private StoredData _storedData; //Plugin Data
 
         private const string DefaultUrl = "https://support.discordapp.com/hc/en-us/articles/228383668-Intro-to-Webhooks";
         private const string AdminPermission = "discordwipe.admin";
+        private const string MapAttachment = "attachment://map.jpg";
+        private const string MapFilename = "map.jpg";
         
         private string _protocol;
         private string _previousProtocol;
-        private IPlayer _consolePlayer;
 
-        private const string MapSeed = "{MapSeed}";
-        private const string MapSize = "{MapSize}";
-        private const string MapSizeSquared = "{MapSizeSquared}";
-        private const string ServerName = "{Servername}";
-        private const string ServerDescription = "{ServerDescription}";
-        private const string ServerIp = "{ServerIp}";
-        private const string ServerPort = "{ServerPort}";
-        private const string Protocol = "{Protocol}";
-        private const string PreviousProtocol = "{PreviousProtocol}";
-        private const string Date = "{Date}";
-        private const string WipeDate = "{WipeDate}";
-        private const string Time = "{Time}";
-        private const string WipeTime = "{WipeTime}";
-        private const string TimeUtc = "{TimeUtc}";
-        private const string MapVersion = "{MapVersion}";
-        private const string BpVersion = "{BpVersion}";
-        private const string OxideVersion = "{OxideVersion}";
-        private const string RustVersion = "{RustVersion}";
-        private const string SystemRamMb = "{SystemRamMB}";
-        private const string SystemRamGb = "{SystemRamGB}";
-        private const string UsedRamMb = "{UsedRamMB}";
-        private const string UsedRamGb = "{UsedRamGB}";
-        private const string MaxPlayers = "{MaxPlayers}";
-        private const string MapAttachment = "attachment://map.jpg";
-        private const string MapFilename = "map.jpg";
+        private Action<IPlayer, StringBuilder> _replacer;
         
         #endregion
 
@@ -110,43 +86,41 @@ namespace Oxide.Plugins
                 Content = config.WipeEmbed?.Content ?? "@everyone",
                 Embed = new EmbedConfig
                 {
-                    Title = config.WipeEmbed?.Embed?.Title ?? ServerName,
+                    Title = config.WipeEmbed?.Embed?.Title ?? "{server.name}",
                     Description = config.WipeEmbed?.Embed?.Description ?? "The server has wiped!",
                     Color = config.WipeEmbed?.Embed?.Color ?? "#de8732",
                     Image = config.WipeEmbed?.Embed?.Image ?? MapAttachment,
                     Thumbnail = config.WipeEmbed?.Embed?.Thumbnail ?? string.Empty,
                     Fields = config.WipeEmbed?.Embed?.Fields ?? new List<FieldConfig>
                     {
+#if RUST
                         new FieldConfig
                         {
                             Title = "Seed",
-                            Value = $"[{MapSeed}](http://playrust.io/map/?Procedural%20Map_{MapSize}_{MapSeed})",
+                            Value = "[{world.seed}](http://playrust.io/map/?Procedural%20Map_{world.size}_{world.seed})",
                             Inline = true,
-                            Order = 1,
                             Enabled = true
                         },
                         new FieldConfig
                         {
                             Title = "Size",
-                            Value = $"{MapSize} ({MapSizeSquared}km^2)",
+                            Value = "{world.size!km}km ({world.size!km^2}km^2)",
                             Inline = true,
-                            Order = 2,
                             Enabled = true
                         },
                         new FieldConfig
                         {
                             Title = "Protocol",
-                            Value = Protocol,
+                            Value = "{server.protocol.network}",
                             Inline = true,
-                            Order = 3,
                             Enabled = true
                         },
+#endif
                         new FieldConfig
                         {
                             Title = "Click & Connect",
-                            Value = $"steam://connect/{ServerIp}:{ServerPort}",
+                            Value = "steam://connect/{server.address}:{server.port}",
                             Inline = false,
-                            Order = 4,
                             Enabled = true
                         }
                     },
@@ -165,7 +139,7 @@ namespace Oxide.Plugins
                 Content = config.ProtocolEmbed?.Content ?? "@everyone",
                 Embed = new EmbedConfig
                 {
-                    Title = config.ProtocolEmbed?.Embed?.Title ?? ServerName,
+                    Title = config.ProtocolEmbed?.Embed?.Title ?? "{server.name}",
                     Description = config.ProtocolEmbed?.Embed?.Description ?? "The server protocol has changed!",
                     Color = config.ProtocolEmbed?.Embed?.Color ?? "#de8732",
                     Image = config.ProtocolEmbed?.Embed?.Image ?? string.Empty,
@@ -175,17 +149,15 @@ namespace Oxide.Plugins
                         new FieldConfig
                         {
                             Title = "Protocol",
-                            Value = Protocol,
+                            Value = "{server.protocol.network}",
                             Inline = true,
-                            Order = 2,
                             Enabled = true
                         },
                         new FieldConfig
                         {
                             Title = "Previous Protocol",
-                            Value = PreviousProtocol,
+                            Value = "{server.protocol.previous}",
                             Inline = true,
-                            Order = 3,
                             Enabled = true
                         },
                         new FieldConfig
@@ -193,15 +165,13 @@ namespace Oxide.Plugins
                             Title = "Mandatory Client Update",
                             Value = "This update requires a mandatory client update in order to be able to play on the server",
                             Inline = false,
-                            Order = 4,
                             Enabled = true
                         },
                         new FieldConfig
                         {
                             Title = "Click & Connect",
-                            Value = $"steam://connect/{ServerIp}:{ServerPort}",
+                            Value = "steam://connect/{server.address}:{server.port}",
                             Inline = false,
-                            Order = 5,
                             Enabled = true
                         }
                     },
@@ -219,11 +189,17 @@ namespace Oxide.Plugins
         
         private void OnServerInitialized()
         {
-#if RUST
-            _consolePlayer = new Oxide.Game.Rust.Libraries.Covalence.RustConsolePlayer();
-#elif HURTWORLD
-            _consolePlayer = new Oxide.Game.Hurtworld.Libraries.Covalence.HurtworldConsolePlayer();
-#endif
+            if (PlaceholderAPI == null || !PlaceholderAPI.IsLoaded)
+            {
+                PrintError("Missing plugin dependency PlaceholderAPI: https://umod.org/plugins/placeholder-api");
+                return;
+            }
+            
+            if(PlaceholderAPI.Version < new VersionNumber(2, 0, 0))
+            {
+                PrintError("Placeholder API plugin must be version 2.0.0 or higher");
+                return;
+            }
             
             _protocol = GetProtocol();
             timer.In(5f, () => HandleStartup());
@@ -273,6 +249,15 @@ namespace Oxide.Plugins
         private void Unload()
         {
             SaveData();
+        }
+        
+        private string GetProtocol()
+        {
+#if RUST
+            return Rust.Protocol.network.ToString();
+#endif
+
+            return covalence.Server.Protocol;
         }
         #endregion
 
@@ -379,71 +364,51 @@ namespace Oxide.Plugins
             SendDiscordMessage(_pluginConfig.ProtocolWebhook, message);
 #endif
         }
-
-        private string ParseField(string field)
+        #endregion
+        
+        #region PlaceholderAPI
+        private string ParseFields(string json)
         {
-            if (PlaceholderAPI != null && PlaceholderAPI.IsLoaded)
+            StringBuilder sb = new StringBuilder(json);
+            
+            GetReplacer()?.Invoke(null, sb);
+            
+            sb.Replace("\\n", "\n");
+            return sb.ToString();
+        }
+        
+        private void OnPluginUnloaded(Plugin plugin)
+        {
+            if (plugin?.Name == "PlaceholderAPI")
             {
-                StringBuilder sb = new StringBuilder(field);
-                PlaceholderAPI.Call("ProcessPlaceholders", _consolePlayer, sb);
-                field = sb.ToString();
+                _replacer = null;
+            }
+        }
+        
+        private void OnPlaceholderAPIReady()
+        {
+            RegisterPlaceholder("server.protocol.previous", (player, s) => _previousProtocol, "Displays the previous protocol version if it changed during the last restart");
+        }
+
+        private void RegisterPlaceholder(string key, Func<IPlayer, string, object> action, string description = null)
+        {
+            if (IsPlaceholderApiLoaded())
+            {
+                PlaceholderAPI.Call("AddPlaceholder", this, key, action, description);
+            }
+        }
+        
+        private Action<IPlayer, StringBuilder> GetReplacer()
+        {
+            if (!IsPlaceholderApiLoaded())
+            {
+                return _replacer;
             }
             
-#if RUST
-            field = field.Replace(MapSeed, World.Seed.ToString())
-                    .Replace(MapSize, World.Size.ToString())
-                    .Replace(MapSizeSquared, $"{Math.Pow(World.Size / 1000f, 2):0.0}")
-                    .Replace(ServerName, ConVar.Server.hostname)
-                    .Replace(ServerDescription, ConVar.Server.description)
-                    .Replace(WipeDate, SaveRestore.SaveCreatedTime.ToString(_pluginConfig.DateFormat))
-                    .Replace(WipeTime, SaveRestore.SaveCreatedTime.ToString(_pluginConfig.TimeFormat))
-                    .Replace(MapVersion, Rust.Protocol.save.ToString())
-                    .Replace(BpVersion, Rust.Protocol.persistance.ToString())
-                    .Replace(RustVersion, RustCore.Version.ToString())
-                    .Replace(UsedRamMb, Performance.current.memoryUsageSystem.ToString("0"))
-                    .Replace(UsedRamGb, (Performance.current.memoryUsageSystem / 1024).ToString())
-            ;
-#endif
-            
-            field = field
-                    .Replace(ServerName, server.Name)
-                    .Replace(ServerIp, GetServerIp())
-                    .Replace(ServerPort, covalence.Server.Port.ToString())
-                    .Replace(Protocol, _protocol)
-                    .Replace(PreviousProtocol, _previousProtocol)
-                    .Replace(Date, DateTime.Now.ToString(_pluginConfig.DateFormat))
-                    .Replace(Time, DateTime.Now.ToString(_pluginConfig.TimeFormat))
-                    .Replace(TimeUtc, DateTime.UtcNow.ToString(_pluginConfig.TimeFormat))
-                    .Replace(OxideVersion, OxideMod.Version.ToString())
-                    .Replace(SystemRamMb, SystemInfo.systemMemorySize.ToString())
-                    .Replace(SystemRamGb,Mathf.CeilToInt(SystemInfo.systemMemorySize / 1024.0f).ToString())
-                    .Replace(MaxPlayers,server.MaxPlayers.ToString())
-                ;
-            
-            field = field.Replace("\\n", "\n");
-            return field;
+            return _replacer ?? (_replacer = PlaceholderAPI.Call<Action<IPlayer, StringBuilder>>("GetProcessPlaceholders"));
         }
 
-        private string GetServerIp()
-        {
-#if RUST
-            return SteamServer.PublicIp.ToString();
-#endif
-            
-            string address = covalence.Server.Address.ToString();
-            string local = covalence.Server.LocalAddress.ToString();
-
-            return address == "0.0.0.0" ? local : address;
-        }
-
-        private string GetProtocol()
-        {
-#if RUST
-            return Rust.Protocol.network.ToString();
-#endif
-
-            return covalence.Server.Protocol;
-        }
+        private bool IsPlaceholderApiLoaded() => PlaceholderAPI != null && PlaceholderAPI.IsLoaded;
         #endregion
 
         #region Helpers
@@ -492,14 +457,6 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Map Render Name")]
             public string MapName { get; set; }
 #endif
-            
-            [DefaultValue("M/dd/yy")]
-            [JsonProperty(PropertyName = "Date Format")]
-            public string DateFormat { get; set; }
-            
-            [DefaultValue("hh:mm:ss")]
-            [JsonProperty(PropertyName = "Time Format")]
-            public string TimeFormat { get; set; }
         }
         
         private class StoredData
@@ -534,7 +491,8 @@ namespace Oxide.Plugins
         /// <param name="message">Message being sent</param>
         private void SendDiscordMessage(string url, DiscordMessage message)
         {
-            webrequest.Enqueue(url, message.ToJson(), SendDiscordMessageCallback, this, RequestMethod.POST, _headers);
+            string json = ParseFields( message.ToJson());
+            webrequest.Enqueue(url, json, SendDiscordMessageCallback, this, RequestMethod.POST, _headers);
         }
 
         /// <summary>
@@ -559,9 +517,10 @@ namespace Oxide.Plugins
         /// <param name="files">Attachments to be added to the DiscordMessage</param>
         private void SendDiscordAttachmentMessage(string url, DiscordMessage message, List<Attachment> files)
         {
+            string json = ParseFields( message.ToJson());
             List<IMultipartFormSection> formData = new List<IMultipartFormSection>
             {
-                new MultipartFormDataSection("payload_json", message.ToJson())
+                new MultipartFormDataSection("payload_json", json)
             };
 
             for (int i = 0; i < files.Count; i++)
@@ -1203,9 +1162,6 @@ namespace Oxide.Plugins
             [JsonProperty("Inline")]
             public bool Inline { get; set; }
 
-            [JsonProperty("Order")]
-            public int Order { get; set; }
-            
             [JsonProperty("Enabled")]
             public bool Enabled { get; set; }
         }
@@ -1238,12 +1194,12 @@ namespace Oxide.Plugins
                 Embed embed = new Embed();
                 if (!string.IsNullOrEmpty(config.Embed.Title))
                 {
-                    embed.AddTitle(ParseField(config.Embed.Title));
+                    embed.AddTitle(config.Embed.Title);
                 }
 
                 if (!string.IsNullOrEmpty(config.Embed.Description))
                 {
-                    embed.AddDescription(ParseField(config.Embed.Description));
+                    embed.AddDescription(config.Embed.Description);
                 }
 
                 if (!string.IsNullOrEmpty(config.Embed.Color))
@@ -1261,9 +1217,9 @@ namespace Oxide.Plugins
                     embed.AddThumbnail(config.Embed.Thumbnail);
                 }
 
-                foreach (FieldConfig field in config.Embed.Fields.Where(f => f.Enabled).OrderBy(f => f.Order))
+                foreach (FieldConfig field in config.Embed.Fields.Where(f => f.Enabled))
                 {
-                    string value = ParseField(field.Value);
+                    string value = field.Value;
                     if (string.IsNullOrEmpty(value))
                     {
                         PrintWarning($"Field: {field.Title} was skipped because the value was null or empty.");
