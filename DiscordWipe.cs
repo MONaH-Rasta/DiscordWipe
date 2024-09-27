@@ -20,7 +20,7 @@ using System.IO;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.3.5")]
+    [Info("Discord Wipe", "MJSU", "2.3.6")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -695,7 +695,6 @@ namespace Oxide.Plugins
             RegisterPlaceholder("server.protocol.previous", (player, s) => _previousProtocol, "Displays the previous protocol version if it changed during the last restart", double.MaxValue);
             RegisterPlaceholder("timestamp.now", (player, s) => UnixTimeNow(), "Displays the current unix timestamp", double.MaxValue);
 #if RUST
-            RegisterPlaceholder("rustmaps.com.map", (player, s) => _rustMapsResponse?.Data?.ImageUrl ?? string.Empty, "RustMaps.com map image url", double.MaxValue);
             RegisterPlaceholder("rustmaps.com.map", (player, s) => _rustMapsResponse?.Data?.ImageUrl ?? string.Empty, "RustMaps.com map image url", double.MaxValue);
             RegisterPlaceholder("rustmaps.com.icons", (player, s) => _rustMapsResponse?.Data?.ImageIconUrl ?? string.Empty, "RustMaps.com icon map image url", double.MaxValue);
             RegisterPlaceholder("rustmaps.com.thumbnail", (player, s) => _rustMapsResponse?.Data?.ThumbnailUrl ?? string.Empty, "RustMaps.com thumbnail map image url", double.MaxValue);
