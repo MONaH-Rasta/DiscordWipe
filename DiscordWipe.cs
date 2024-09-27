@@ -11,13 +11,14 @@ using Oxide.Core.Plugins;
 using UnityEngine;
 
 #if RUST
+using Steamworks;
 using UnityEngine.Networking;
 using System.Collections;
 #endif
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.0.2")]
+    [Info("Discord Wipe", "MJSU", "2.0.3")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -41,8 +42,6 @@ namespace Oxide.Plugins
         private const string ServerName = "{Servername}";
         private const string ServerDescription = "{ServerDescription}";
         private const string ServerIp = "{ServerIp}";
-        private const string ServerLocalIp = "{ServerLocalIp}";
-        private const string ConnectIp = "{ConnectIp}";
         private const string ServerPort = "{ServerPort}";
         private const string Protocol = "{Protocol}";
         private const string PreviousProtocol = "{PreviousProtocol}";
@@ -138,7 +137,7 @@ namespace Oxide.Plugins
                         new FieldConfig
                         {
                             Title = "Click & Connect",
-                            Value = $"steam://connect/{ConnectIp}:{ServerPort}",
+                            Value = $"steam://connect/{ServerIp}:{ServerPort}",
                             Inline = false,
                             Order = 4,
                             Enabled = true
@@ -193,7 +192,7 @@ namespace Oxide.Plugins
                         new FieldConfig
                         {
                             Title = "Click & Connect",
-                            Value = $"steam://connect/{ConnectIp}:{ServerPort}",
+                            Value = $"steam://connect/{ServerIp}:{ServerPort}",
                             Inline = false,
                             Order = 5,
                             Enabled = true
@@ -370,12 +369,10 @@ namespace Oxide.Plugins
             
             field = field
                     .Replace(ServerName, server.Name)
-                    .Replace(ServerIp, covalence.Server.Address.ToString())
-                    .Replace(ServerLocalIp, covalence.Server.LocalAddress.ToString())
+                    .Replace(ServerIp, GetServerIp())
                     .Replace(ServerPort, covalence.Server.Port.ToString())
                     .Replace(Protocol, _protocol)
                     .Replace(PreviousProtocol, _previousProtocol)
-                    .Replace(ConnectIp, GetConnectIp())
                     .Replace(Date, DateTime.Now.ToString(_pluginConfig.DateFormat))
                     .Replace(Time, DateTime.Now.ToString(_pluginConfig.TimeFormat))
                     .Replace(TimeUtc, DateTime.UtcNow.ToString(_pluginConfig.TimeFormat))
@@ -385,8 +382,12 @@ namespace Oxide.Plugins
             return field;
         }
 
-        private string GetConnectIp()
+        private string GetServerIp()
         {
+#if RUST
+            return SteamServer.PublicIp.ToString();
+#endif
+            
             string address = covalence.Server.Address.ToString();
             string local = covalence.Server.LocalAddress.ToString();
 
