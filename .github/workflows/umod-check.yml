@@ -80,6 +80,8 @@ jobs:
 
       - name: Create GitHub release
         if: steps.compare.outputs.new_version == 'true'
+        env:
+            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "v${{ steps.fetch_umod.outputs.latest_version }}" \
             DiscordWipe.cs \
