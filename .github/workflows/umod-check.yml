@@ -2,7 +2,7 @@ name: Check uMod Plugin Updates
 
 on:
   schedule:
-    - cron: '0 0 * * *' # Check every day at midnight (UTC)
+    - cron: '10 */2 * * *' # Check every 2 hours at 10 minutes past the hour
   workflow_dispatch: # Allow manual trigger
 
 jobs:
@@ -13,65 +13,42 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Fetch current plugin file from uMod
-        id: fetch_plugin
+      - name: Check for uMod Plugin Updates
         run: |
-          # Downloading the latest plugin file
-          UMOD_API_URL="https://umod.org/plugins/discord-wipe.json"
-          response=$(curl -s $UMOD_API_URL)
-          download_url=$(echo "$response" | jq -r '.download_url')
-          curl -o DiscordWipe.cs "$download_url"
+          PLUGIN_NAME="DiscordWipe"
 
-      - name: Extract version from file
-        id: extract_version
-        run: |
+          # Fetch current plugin file from uMod
+          curl -O "https://umod.org/plugins/${PLUGIN_NAME}.cs"
+
           # Extract the version from the Info attribute in the file
-          plugin_version=$(sed -n 's/.*\[Info(".*", ".*", "\([^"]*\)").*/\1/p' DiscordWipe.cs)
+          plugin_version=$(sed -n 's/.*\[Info(".*", ".*", "\([^"]*\)").*/\1/p' ${PLUGIN_NAME}.cs)
           echo "Plugin version in file: $plugin_version"
-          echo "plugin_version=$plugin_version" >> $GITHUB_ENV
 
-      - name: Get latest GitHub release version
-        id: get_latest_release
-        run: |
+          # Get latest GitHub release version
           git fetch --tags
           latest_tag=$(git describe --tags $(git rev-list --tags --max-count=1) 2>/dev/null || echo "v0.0.0")
           current_version=${latest_tag#v}
-
           echo "Latest GitHub release version: $current_version"
-          echo "current_version=$current_version" >> $GITHUB_ENV
 
-      - name: Compare versions
-        id: compare
-        run: |
-          current_version="${{ env.current_version }}"
-          plugin_version="${{ env.plugin_version }}"
-
+          # Compare versions
           echo "Current version in repo: $current_version"
           echo "Latest version in plugin file: $plugin_version"
 
           # Compare versions
           if [ "$current_version" != "$plugin_version" ]; then
             echo "New version found: $plugin_version"
-            echo "new_version=true" >> $GITHUB_ENV
+
+            # Commit and push new version
+            git config --global user.name "github-actions"
+            git config --global user.email "github-actions@github.com"
+            git add ${PLUGIN_NAME}.cs
+            git commit -m "v${plugin_version}"
+            git push
+
+            # Create GitHub release
+            gh release create "v${plugin_version}" ${PLUGIN_NAME}.cs \
+              --title "${PLUGIN_NAME} v${plugin_version}" \
+              --notes "Automatic release of new version from the plugin file."
           else
             echo "No new version"
-            echo "new_version=false" >> $GITHUB_ENV
           fi
-
-      - name: Commit and push new version
-        if: env.new_version == 'true'
-        run: |
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
-          git add DiscordWipe.cs
-          git commit -m "v${{ env.plugin_version }}"
-          git push
-
-      - name: Create GitHub release
-        if: env.new_version == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create "v${{ env.plugin_version }}" DiscordWipe.cs \
-            --title "DiscordWipe v${{ env.plugin_version }}" \
-            --notes "Automatic release of new version from the plugin file."
