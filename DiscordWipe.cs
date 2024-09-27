@@ -4,7 +4,6 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Oxide.Core;
@@ -21,7 +20,7 @@ using System.IO;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.3.2")]
+    [Info("Discord Wipe", "MJSU", "2.3.3")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -86,9 +85,12 @@ namespace Oxide.Plugins
                     embed.WebhookOverride = embed.WebhookOverride.Replace("/api/webhooks", "/api/v9/webhooks");
                 }
             }
-            
+
+#if RUST
             _rustMapGenerateHeaders["X-API-Key"] = _pluginConfig.ImageSettings.RustMaps.ApiKey;
             _rustMapGetHeaders["X-API-Key"] = _pluginConfig.ImageSettings.RustMaps.ApiKey;
+#endif
+            
         }
         
         protected override void LoadDefaultMessages()
@@ -306,6 +308,7 @@ namespace Oxide.Plugins
                 return;
             }
 
+#if RUST
             if (IsRustMapApiLoaded() && _pluginConfig.ImageSettings.MapMode == RustMapMode.RustMapApi)
             {
                 if(RustMapApi.Version < new VersionNumber(1,3,2))
@@ -326,6 +329,7 @@ namespace Oxide.Plugins
                 timer.In(15 * 60f, HandleStartup);
                 return;
             }
+#endif
 
             //Delayed so PlaceholderAPI can be ready before we call
             SubscribeAll();
@@ -577,7 +581,6 @@ namespace Oxide.Plugins
                 }
             }
         }
-        #endif
 
         #region RustMaps.com
         private readonly Dictionary<string, string> _rustMapGenerateHeaders = new Dictionary<string, string>
@@ -661,6 +664,7 @@ namespace Oxide.Plugins
             }
         }
         #endregion
+#endif
         
         #region PlaceholderAPI
         private string ParseField(string field)
@@ -682,9 +686,11 @@ namespace Oxide.Plugins
         private void OnPlaceholderAPIReady()
         {
             RegisterPlaceholder("server.protocol.previous", (player, s) => _previousProtocol, "Displays the previous protocol version if it changed during the last restart", double.MaxValue);
+#if RUST
             RegisterPlaceholder("rustmaps.com.map", (player, s) => _rustMapsResponse?.Data?.ImageUrl ?? string.Empty, "RustMaps.com map image url", double.MaxValue);
             RegisterPlaceholder("rustmaps.com.icons", (player, s) => _rustMapsResponse?.Data?.ImageIconUrl ?? string.Empty, "RustMaps.com icon map image url", double.MaxValue);
             RegisterPlaceholder("rustmaps.com.thumbnail", (player, s) => _rustMapsResponse?.Data?.ThumbnailUrl ?? string.Empty, "RustMaps.com thumbnail map image url", double.MaxValue);
+#endif
         }
 
         private void RegisterPlaceholder(string key, Func<IPlayer, string, object> action, string description = null, double ttl = double.NaN)
