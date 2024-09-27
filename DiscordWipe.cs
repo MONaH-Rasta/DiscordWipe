@@ -19,7 +19,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.0.12")]
+    [Info("Discord Wipe", "MJSU", "2.0.13")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -408,6 +408,7 @@ namespace Oxide.Plugins
                     .Replace(OxideVersion, OxideMod.Version.ToString())
                 ;
             
+            field = field.Replace("\\n", "\n");
             return field;
         }
 
