@@ -1,23 +1,18 @@
 ﻿using System.ComponentModel;
 using Newtonsoft.Json;
+using Oxide.Core;
 using Oxide.Core.Plugins;
-
-#if RUST
-    using Oxide.Core;
-#endif
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "1.0.1")]
+    [Info("Discord Wipe", "MJSU", "1.0.2")]
     [Description("Sends a notification to a discord channel when the server wipes")]
     internal class DiscordWipe : CovalencePlugin
     {
         #region Class Fields
         [PluginReference] private Plugin DiscordCore;
         
-#if RUST
         private StoredData _storedData; //Plugin Data
-#endif
         
         private PluginConfig _pluginConfig;
 
@@ -25,12 +20,10 @@ namespace Oxide.Plugins
         #endregion
 
         #region Setup & Loading
-#if RUST
         private void Init()
         {
             _storedData = Interface.Oxide.DataFileSystem.ReadObject<StoredData>(Name);
         }
-#endif
 
         private void OnServerInitialized()
         {
@@ -57,14 +50,22 @@ namespace Oxide.Plugins
                     SendChannel(_pluginConfig.WipeText);
                 }
 
-#if RUST
-                if (_storedData.Protocol != 0 && _storedData.Protocol != Rust.Protocol.network && _pluginConfig.ProtocolChange)
+                string protocol = GetProtocol();
+                if (string.IsNullOrEmpty(_storedData.Protocol))
                 {
-                    _storedData.Protocol = Rust.Protocol.network;
-                    SendChannel(string.Format(_pluginConfig.ProtocolText, _storedData.Protocol));
+                    _storedData.Protocol = protocol;
                     SaveData();
                 }
-#endif
+                else if (_storedData.Protocol != protocol && _pluginConfig.ProtocolChange)
+                {
+                    _storedData.Protocol = protocol;
+                    SaveData();
+                    
+                    if (_pluginConfig.ProtocolChange)
+                    {
+                        SendChannel(string.Format(_pluginConfig.ProtocolText, protocol));
+                    }
+                }
             });
         }
 
@@ -96,13 +97,20 @@ namespace Oxide.Plugins
                 DiscordCore.Call("SendMessageToChannel", _pluginConfig.AnnouncementsChannelName, $"{_pluginConfig.Prefix} {message}");
             }
         }
-        #endregion
 
+        private string GetProtocol()
+        {
 #if RUST
+            return server.Protocol.Split('.')[0];
+#else
+            return server.Protocol;
+#endif
+        }
+        #endregion
+        
         #region Helper Methods
         private void SaveData() => Interface.Oxide.DataFileSystem.WriteObject(Name, _storedData);
         #endregion
-#endif
 
         #region Classes
         private class PluginConfig
@@ -122,22 +130,20 @@ namespace Oxide.Plugins
             [DefaultValue("@everyone The SERVERNAME server has wiped! Join Now!")]
             [JsonProperty(PropertyName = "Wipe Text")]
             public string WipeText { get; set; }
-#if RUST           
+            
             [DefaultValue(true)]
             [JsonProperty(PropertyName = "Send on Protocol Change")]
             public bool ProtocolChange { get; set; }
             
-            [DefaultValue("The rust server has been updated to protocol {0}")]
+            [DefaultValue("The server has been updated to protocol {0}")]
             [JsonProperty(PropertyName = "Protocol Text")]
             public string ProtocolText { get; set; }
-#endif
         }
-#if RUST
+        
         private class StoredData
         {
-            public int Protocol { get; set; }
+            public string Protocol { get; set; }
         }
-#endif
 
         #endregion
     }
