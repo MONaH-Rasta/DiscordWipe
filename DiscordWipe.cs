@@ -3,11 +3,13 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Libraries;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
+using Oxide.Game.Rust.Libraries.Covalence;
 using UnityEngine;
 
 #if RUST
@@ -18,13 +20,13 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.0.7")]
+    [Info("Discord Wipe", "MJSU", "2.0.8")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
         #region Class Fields
 
-        [PluginReference] private Plugin RustMapApi;
+        [PluginReference] private Plugin RustMapApi, PlaceholderAPI;
         
         private PluginConfig _pluginConfig; //Plugin Config
         private StoredData _storedData; //Plugin Data
@@ -34,6 +36,7 @@ namespace Oxide.Plugins
         
         private string _protocol;
         private string _previousProtocol;
+        private IPlayer _consolePlayer;
 
         private const string MapSeed = "{MapSeed}";
         private const string MapSize = "{MapSize}";
@@ -211,6 +214,7 @@ namespace Oxide.Plugins
         
         private void OnServerInitialized()
         {
+            _consolePlayer = new RustConsolePlayer();
             _protocol = GetProtocol();
             timer.In(5f, () => HandleStartup());
         }
@@ -368,6 +372,13 @@ namespace Oxide.Plugins
 
         private string ParseField(string field)
         {
+            if (PlaceholderAPI != null && PlaceholderAPI.IsLoaded)
+            {
+                StringBuilder sb = new StringBuilder(field);
+                PlaceholderAPI.Call("ProcessPlaceholders", _consolePlayer, sb);
+                field = sb.ToString();
+            }
+            
 #if RUST
             field = field.Replace(MapSeed, World.Seed.ToString())
                     .Replace(MapSize, World.Size.ToString())
@@ -1235,7 +1246,14 @@ namespace Oxide.Plugins
 
                 foreach (FieldConfig field in config.Embed.Fields.Where(f => f.Enabled).OrderBy(f => f.Order))
                 {
-                    embed.AddField(field.Title, ParseField(field.Value), field.Inline);
+                    string value = ParseField(field.Value);
+                    if (string.IsNullOrEmpty(value))
+                    {
+                        PrintWarning($"Field: {field.Title} was skipped because the value was null or empty.");
+                        continue;
+                    }
+                    
+                    embed.AddField(field.Title, value, field.Inline);
                 }
 
                 if (config.Embed.Footer != null && config.Embed.Footer.Enabled)
