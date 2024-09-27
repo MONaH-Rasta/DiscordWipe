@@ -18,7 +18,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.0.5")]
+    [Info("Discord Wipe", "MJSU", "2.0.6")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -229,13 +229,7 @@ namespace Oxide.Plugins
             }
             
             _protocol = GetProtocol();
-            
-            if (_storedData.IsWipe)
-            {
-                SendWipe();
-                Puts("Wipe notification sent");
-            }
-            else if (string.IsNullOrEmpty(_storedData.Protocol))
+            if (string.IsNullOrEmpty(_storedData.Protocol))
             {
                 _storedData.Protocol = _protocol;
                 SaveData();
@@ -246,6 +240,14 @@ namespace Oxide.Plugins
                 _storedData.Protocol = _protocol;
                 SaveData();
                 Puts("Protocol notification sent");
+            }
+            
+            if (_storedData.IsWipe)
+            {
+                SendWipe();
+                Puts("Wipe notification sent");
+                _storedData.IsWipe = false;
+                SaveData();
             }
         }
 
@@ -302,7 +304,6 @@ namespace Oxide.Plugins
         {
             if (_pluginConfig.WipeWebhook == DefaultUrl)
             {
-                PrintError("You're using the default webhook url for wipe. Please update with the webhook url for the channel you want this sent to.");
                 return;
             }
             
@@ -337,15 +338,12 @@ namespace Oxide.Plugins
 #else
             SendDiscordMessage(_pluginConfig.WipeWebhook, message);
 #endif
-            _storedData.IsWipe = false;
-            SaveData();
         }
 
         private void SendProtocol()
         {
             if (_pluginConfig.ProtocolWebhook == DefaultUrl)
             {
-                PrintError("You're using the default webhook url for protocol. Please update with the webhook url for the channel you want this sent to.");
                 return;
             }
             
