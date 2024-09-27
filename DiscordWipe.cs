@@ -19,7 +19,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.1.9")]
+    [Info("Discord Wipe", "MJSU", "2.1.11")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -232,7 +232,8 @@ namespace Oxide.Plugins
                 }
             }
 
-            HandleStartup();
+            //Delayed so PlaceholderAPI can be ready before we call
+            timer.In(1f, HandleStartup);
         }
 
         private void OnRustMapApiReady()
