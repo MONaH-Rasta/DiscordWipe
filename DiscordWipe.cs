@@ -18,7 +18,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.1.1")]
+    [Info("Discord Wipe", "MJSU", "2.1.2")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -516,9 +516,7 @@ namespace Oxide.Plugins
         /// <param name="files">Attachments to be added to the DiscordMessage</param>
         private void SendDiscordAttachmentMessage(string url, DiscordMessage message, List<Attachment> files)
         {
-            Puts(message.ToJson());
             string json = ParseFields( message.ToJson());
-            Puts("--------------------\n" + json);
             List<IMultipartFormSection> formData = new List<IMultipartFormSection>
             {
                 new MultipartFormDataSection("payload_json", json)
