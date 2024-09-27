@@ -16,45 +16,35 @@ jobs:
       - name: Fetch current version from uMod
         id: fetch_umod
         run: |
-          # API URL to fetch plugin data
           UMOD_API_URL="https://umod.org/plugins/discord-wipe.json"
-          
-          # Fetching the plugin data from uMod API
           response=$(curl -s $UMOD_API_URL)
 
-          # Extract latest version and download URL
           latest_version=$(echo "$response" | jq -r '.latest_release_version')
           download_url=$(echo "$response" | jq -r '.download_url')
 
           echo "Latest version on uMod: $latest_version"
           echo "Download URL: $download_url"
 
-          # Use environment files to share data between steps
           echo "latest_version=$latest_version" >> $GITHUB_ENV
           echo "download_url=$download_url" >> $GITHUB_ENV
 
       - name: Get latest GitHub release version
         id: get_latest_release
         run: |
-          # Get the latest tag version from GitHub, or fallback to '0.0.0' if no tags are found
           latest_tag=$(git describe --tags $(git rev-list --tags --max-count=1) 2>/dev/null || echo "v0.0.0")
-
-          # Removing the 'v' prefix if it exists
           current_version=${latest_tag#v}
 
           echo "Latest GitHub release version: $current_version"
           echo "current_version=$current_version" >> $GITHUB_ENV
 
       - name: Compare versions
-        id: compare
         run: |
           current_version="${{ env.current_version }}"
           latest_version="${{ env.latest_version }}"
 
           echo "Current version in repo: $current_version"
           echo "Latest version from uMod: $latest_version"
-          
-          # Compare versions
+
           if [ "$current_version" != "$latest_version" ]; then
             echo "New version found: $latest_version"
             echo "new_version=true" >> $GITHUB_ENV
@@ -67,10 +57,10 @@ jobs:
         if: env.new_version == 'true'
         run: |
           download_url="${{ env.download_url }}"
-          
+
           # Downloading new plugin version
           curl -o DiscordWipe.cs "$download_url"
-          
+
           # Commit the new version to the repository
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
@@ -81,7 +71,7 @@ jobs:
       - name: Create GitHub release
         if: env.new_version == 'true'
         env:
-            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "v${{ env.latest_version }}" \
             DiscordWipe.cs \
