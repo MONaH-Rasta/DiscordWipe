@@ -13,21 +13,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Fetch current version from uMod
-        id: fetch_umod
+      - name: Fetch current plugin file from uMod
+        id: fetch_plugin
         run: |
+          # Downloading the latest plugin file
           UMOD_API_URL="https://umod.org/plugins/discord-wipe.json"
-          
           response=$(curl -s $UMOD_API_URL)
-          echo "$response"
-          latest_version=$(echo "$response" | jq -r '.latest_release_version')
           download_url=$(echo "$response" | jq -r '.download_url')
+          curl -o DiscordWipe.cs "$download_url"
 
-          echo "Latest version on uMod: $latest_version"
-          echo "Download URL: $download_url"
-
-          echo "latest_version=$latest_version" >> $GITHUB_ENV
-          echo "download_url=$download_url" >> $GITHUB_ENV
+      - name: Extract version from file
+        id: extract_version
+        run: |
+          # Extract the version from the Info attribute in the file
+          plugin_version=$(grep -Po '(?<=\[Info\("[^"]+", "[^"]+", ")[^"]+' DiscordWipe.cs)
+          echo "Plugin version in file: $plugin_version"
+          echo "plugin_version=$plugin_version" >> $GITHUB_ENV
 
       - name: Get latest GitHub release version
         id: get_latest_release
@@ -42,28 +43,25 @@ jobs:
       - name: Compare versions
         run: |
           current_version="${{ env.current_version }}"
-          latest_version="${{ env.latest_version }}"
+          plugin_version="${{ env.plugin_version }}"
 
           echo "Current version in repo: $current_version"
-          echo "Latest version from uMod: $latest_version"
+          echo "Latest version in plugin file: $plugin_version"
           
-          if [ "$current_version" != "$latest_version" ]; then
-            echo "New version found: $latest_version"
+          if [ "$current_version" != "$plugin_version" ]; then
+            echo "New version found: $plugin_version"
             echo "new_version=true" >> $GITHUB_ENV
           else
             echo "No new version"
             echo "new_version=false" >> $GITHUB_ENV
 
-      - name: Download new plugin version
+      - name: Commit and push new version
         if: env.new_version == 'true'
         run: |
-          download_url="${{ env.download_url }}"
-          curl -o DiscordWipe.cs "$download_url"
-          
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
           git add DiscordWipe.cs
-          git commit -m "v${{ env.latest_version }}"
+          git commit -m "v${{ env.plugin_version }}"
           git push
 
       - name: Create GitHub release
@@ -71,6 +69,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "v${{ env.latest_version }}" DiscordWipe.cs \
-            --title "DiscordWipe v${{ env.latest_version }}" \
-            --notes "Automatic release of new version from uMod."
+          gh release create "v${{ env.plugin_version }}" DiscordWipe.cs \
+            --title "DiscordWipe v${{ env.plugin_version }}" \
+            --notes "Automatic release of new version from the plugin file."
