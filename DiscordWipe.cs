@@ -18,7 +18,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.0.3")]
+    [Info("Discord Wipe", "MJSU", "2.0.4")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -212,31 +212,41 @@ namespace Oxide.Plugins
         
         private void OnServerInitialized()
         {
-            _protocol = GetProtocol();
-            if (RustMapApi != null && !RustMapApi.Call<bool>("IsReady"))
+            HandleStartup();
+        }
+
+        private void HandleStartup(int attempts = 0)
+        {
+            if (attempts < 12 && RustMapApi != null && !RustMapApi.Call<bool>("IsReady"))
             {
+                Puts($"Waiting on RustMapApi to be ready. Attempt # {attempts + 1}");
+                timer.In(5f, () => HandleStartup(attempts + 1));
                 return;
             }
 
-            OnRustMapApiReady();
-        }
-
-        private void OnRustMapApiReady()
-        {
-            if (_isWipe && _pluginConfig.WipeWebhook != DefaultUrl)
+            if (attempts >= 12)
+            {
+                PrintWarning("RustMapApi failed to be ready in time. Skipping map image.");
+            }
+            
+            _protocol = GetProtocol();
+            
+            if (_isWipe)
             {
                 SendWipe();
+                Puts("Wipe notification sent");
             }
             else if (string.IsNullOrEmpty(_storedData.Protocol))
             {
                 _storedData.Protocol = _protocol;
                 SaveData();
             }
-            else if (_storedData.Protocol != _protocol && _pluginConfig.ProtocolWebhook != DefaultUrl)
+            else if (_storedData.Protocol != _protocol)
             {
                 SendProtocol();
                 _storedData.Protocol = _protocol;
                 SaveData();
+                Puts("Protocol notification sent");
             }
         }
 
@@ -294,7 +304,9 @@ namespace Oxide.Plugins
             
             DiscordMessage message = ParseMessage(_pluginConfig.WipeEmbed);
             
+#if RUST
             List<Attachment> attachments = new List<Attachment>();
+            
             if (RustMapApi != null && _pluginConfig.WipeEmbed.Embed.Image == MapAttachment)
             {
                 List<string> maps = RustMapApi.Call<List<string>>("GetSavedMaps");
@@ -317,7 +329,6 @@ namespace Oxide.Plugins
                 }
             }
 
-#if RUST
             SendDiscordAttachmentMessage(_pluginConfig.WipeWebhook, message, attachments);
 #else
             SendDiscordMessage(_pluginConfig.WipeWebhook, message);
@@ -334,7 +345,7 @@ namespace Oxide.Plugins
             }
             
             DiscordMessage message = ParseMessage(_pluginConfig.ProtocolEmbed);
-
+#if RUST
             List<Attachment> attachments = new List<Attachment>();
             if (RustMapApi != null && _pluginConfig.ProtocolEmbed.Embed.Image == MapAttachment)
             {
@@ -345,7 +356,7 @@ namespace Oxide.Plugins
                     attachments.Add(new Attachment(mapData, MapFilename, AttachmentContentType.Jpg));
                 }
             }
-#if RUST
+
             SendDiscordAttachmentMessage(_pluginConfig.ProtocolWebhook, message, attachments);
 #else
             SendDiscordMessage(_pluginConfig.ProtocolWebhook, message);
@@ -444,10 +455,12 @@ namespace Oxide.Plugins
             
             [JsonProperty(PropertyName = "Protocol message")]
             public DiscordMessageConfig ProtocolEmbed { get; set; }
-            
+
+#if RUST
             [DefaultValue("Icons")]
             [JsonProperty(PropertyName = "Map Render Name")]
             public string MapName { get; set; }
+#endif
             
             [DefaultValue("M/dd/yy")]
             [JsonProperty(PropertyName = "Date Format")]
