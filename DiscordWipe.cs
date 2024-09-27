@@ -18,7 +18,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.0.4")]
+    [Info("Discord Wipe", "MJSU", "2.0.5")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -31,8 +31,7 @@ namespace Oxide.Plugins
 
         private const string DefaultUrl = "https://support.discordapp.com/hc/en-us/articles/228383668-Intro-to-Webhooks";
         private const string AdminPermission = "discordwipe.admin";
-
-        private bool _isWipe;
+        
         private string _protocol;
         private string _previousProtocol;
 
@@ -212,7 +211,7 @@ namespace Oxide.Plugins
         
         private void OnServerInitialized()
         {
-            HandleStartup();
+            timer.In(5f, () => HandleStartup());
         }
 
         private void HandleStartup(int attempts = 0)
@@ -231,7 +230,7 @@ namespace Oxide.Plugins
             
             _protocol = GetProtocol();
             
-            if (_isWipe)
+            if (_storedData.IsWipe)
             {
                 SendWipe();
                 Puts("Wipe notification sent");
@@ -252,7 +251,12 @@ namespace Oxide.Plugins
 
         private void OnNewSave(string filename)
         {
-            _isWipe = true;
+            _storedData.IsWipe = true;
+        }
+
+        private void Unload()
+        {
+            SaveData();
         }
         #endregion
 
@@ -333,7 +337,8 @@ namespace Oxide.Plugins
 #else
             SendDiscordMessage(_pluginConfig.WipeWebhook, message);
 #endif
-            _isWipe = false;
+            _storedData.IsWipe = false;
+            SaveData();
         }
 
         private void SendProtocol()
@@ -473,6 +478,7 @@ namespace Oxide.Plugins
         
         private class StoredData
         {
+            public bool IsWipe { get; set; }
             public string Protocol { get; set; }
         }
 
