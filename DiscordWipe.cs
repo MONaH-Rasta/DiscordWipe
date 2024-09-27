@@ -9,18 +9,22 @@ using Oxide.Core;
 using Oxide.Core.Libraries;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
-using Oxide.Game.Rust.Libraries.Covalence;
 using UnityEngine;
 
 #if RUST
 using Steamworks;
 using UnityEngine.Networking;
 using System.Collections;
+using Oxide.Game.Rust.Libraries.Covalence;
+#elif HURTWORLD
+using Oxide.Game.Hurtworld.Libraries.Covalence;
 #endif
+
+
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.0.9")]
+    [Info("Discord Wipe", "MJSU", "2.0.10")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
