@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 using Oxide.Core;
 using Oxide.Core.Libraries;
 using Oxide.Core.Libraries.Covalence;
@@ -18,7 +19,7 @@ using System.Collections;
 
 namespace Oxide.Plugins
 {
-    [Info("Discord Wipe", "MJSU", "2.1.2")]
+    [Info("Discord Wipe", "MJSU", "2.1.3")]
     [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
     internal class DiscordWipe : CovalencePlugin
     {
@@ -39,6 +40,7 @@ namespace Oxide.Plugins
 
         private Action<IPlayer, StringBuilder> _replacer;
         
+        private enum DebugEnum {Message, None, Error, Warning, Info}
         #endregion
 
         #region Setup & Loading
@@ -104,7 +106,7 @@ namespace Oxide.Plugins
                         new FieldConfig
                         {
                             Title = "Size",
-                            Value = "{world.size!km}km ({world.size!km^2}km^2)",
+                            Value = "{world.size}M ({world.size!km^2}km^2)",
                             Inline = true,
                             Enabled = true
                         },
@@ -411,6 +413,13 @@ namespace Oxide.Plugins
         #endregion
 
         #region Helpers
+        private void Debug(DebugEnum level, string message)
+        {
+            if ((int) level <= (int) _pluginConfig.DebugLevel)
+            {
+                Puts($"{level}: {message}");
+            }
+        }
 
         private string Lang(string key, IPlayer player = null, params object[] args)
         {
@@ -433,6 +442,11 @@ namespace Oxide.Plugins
         #region Classes
         private class PluginConfig
         {
+            [JsonConverter(typeof(StringEnumConverter))]
+            [DefaultValue(DebugEnum.None)]
+            [JsonProperty(PropertyName = "Debug Level (None, Error, Warning, Info)")]
+            public DebugEnum DebugLevel { get; set; }
+            
             [DefaultValue("dw")]
             [JsonProperty(PropertyName = "Command")]
             public string Command { get; set; }
@@ -490,7 +504,10 @@ namespace Oxide.Plugins
         /// <param name="message">Message being sent</param>
         private void SendDiscordMessage(string url, DiscordMessage message)
         {
-            string json = ParseFields( message.ToJson());
+            string messageJson = message.ToJson();
+            Debug(DebugEnum.Info, $"SendDiscordMessage - ToJson \n{messageJson}");
+            string json = ParseFields( messageJson);
+            Debug(DebugEnum.Info, $"SendDiscordMessage - ParseFields \n{json}");
             webrequest.Enqueue(url, json, SendDiscordMessageCallback, this, RequestMethod.POST, _headers);
         }
 
@@ -516,7 +533,10 @@ namespace Oxide.Plugins
         /// <param name="files">Attachments to be added to the DiscordMessage</param>
         private void SendDiscordAttachmentMessage(string url, DiscordMessage message, List<Attachment> files)
         {
-            string json = ParseFields( message.ToJson());
+            string messageJson = message.ToJson();
+            Debug(DebugEnum.Info, $"SendDiscordMessage - ToJson \n{messageJson}");
+            string json = ParseFields( messageJson);
+            Debug(DebugEnum.Info, $"SendDiscordMessage - ParseFields \n{json}");
             List<IMultipartFormSection> formData = new List<IMultipartFormSection>
             {
                 new MultipartFormDataSection("payload_json", json)
