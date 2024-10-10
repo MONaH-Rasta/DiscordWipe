@@ -22,7 +22,7 @@ using ConVar;
 
 namespace Oxide.Plugins;
 
-[Info("Discord Wipe", "MJSU", "2.4.0")]
+[Info("Discord Wipe", "MJSU", "2.4.1")]
 [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
 internal class DiscordWipe : CovalencePlugin
 {
@@ -69,14 +69,14 @@ internal class DiscordWipe : CovalencePlugin
             
         permission.RegisterPermission(AdminPermission, this);
             
-        _pluginConfig.ProtocolWebhook = _pluginConfig.ProtocolWebhook.Replace("/api/webhooks", "/api/v10/webhooks");
-        _pluginConfig.WipeWebhook = _pluginConfig.WipeWebhook.Replace("/api/webhooks", "/api/v10/webhooks");
+        _pluginConfig.ProtocolWebhook = UpdateWebhookUrl(_pluginConfig.ProtocolWebhook);
+        _pluginConfig.WipeWebhook =  UpdateWebhookUrl(_pluginConfig.WipeWebhook);
 
         foreach (DiscordMessageConfig embed in _pluginConfig.WipeEmbeds)
         {
             if (!string.IsNullOrEmpty(embed.WebhookOverride) && embed.WebhookOverride != DefaultUrl)
             {
-                embed.WebhookOverride = embed.WebhookOverride.Replace("/api/webhooks", "/api/v10/webhooks");
+                embed.WebhookOverride = UpdateWebhookUrl(embed.WebhookOverride);
             }
         }
             
@@ -84,7 +84,7 @@ internal class DiscordWipe : CovalencePlugin
         {
             if (!string.IsNullOrEmpty(embed.WebhookOverride) && embed.WebhookOverride != DefaultUrl)
             {
-                embed.WebhookOverride = embed.WebhookOverride.Replace("/api/webhooks", "/api/v10/webhooks");
+                embed.WebhookOverride = UpdateWebhookUrl(embed.WebhookOverride);
             }
         }
 
@@ -93,6 +93,11 @@ internal class DiscordWipe : CovalencePlugin
         _rustMapGetHeaders["X-API-Key"] = _pluginConfig.ImageSettings.RustMaps.ApiKey;
 #endif
             
+    }
+
+    public string UpdateWebhookUrl(string url)
+    {
+        return url.Replace("/api/webhooks", "/api/v10/webhooks").Replace("https://discordapp.com/", "https://discord.com/");
     }
         
     protected override void LoadDefaultMessages()
@@ -988,7 +993,7 @@ internal class DiscordWipe : CovalencePlugin
 
         if (www.isNetworkError || www.isHttpError)
         {
-            PrintError($"{www.error} {www.downloadHandler.text}");
+            PrintError($"CODE: {www.error} ERROR: {www.downloadHandler.text}");
         }
     }
 #endif
