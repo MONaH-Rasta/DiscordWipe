@@ -22,7 +22,7 @@ using ConVar;
 
 namespace Oxide.Plugins;
 
-[Info("Discord Wipe", "MJSU", "2.4.1")]
+[Info("Discord Wipe", "MJSU", "2.4.3")]
 [Description("Sends a notification to a discord channel when the server wipes or protocol changes")]
 internal class DiscordWipe : CovalencePlugin
 {
@@ -557,8 +557,7 @@ internal class DiscordWipe : CovalencePlugin
             }
 
             Hash<string, object> map = response as Hash<string, object>;
-            byte[] mapData = map?["image"] as byte[];
-            if (mapData != null)
+            if (map?["image"] is byte[] mapData)
             {
                 if (mapData.Length >= 8 * 1024 * 1024)
                 {
@@ -591,7 +590,8 @@ internal class DiscordWipe : CovalencePlugin
 
     public void GetRustMapsMap()
     {
-        if (string.IsNullOrEmpty(ConVar.Server.levelurl))
+        Debug(DebugEnum.Info, $"{nameof(GetRustMapsMap)} - Convar.Server.levelurl: \"{ConVar.Server.levelurl}\"");
+        if (string.IsNullOrEmpty(ConVar.Server.levelurl) || (ConVar.Server.levelurl.StartsWith("https://files.facepunch.com/rust/maps") && ConVar.Server.levelurl.Contains("proceduralmap.")))
         {
             uint seed = World.Seed;
             uint size = World.Size;
